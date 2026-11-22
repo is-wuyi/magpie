@@ -43,7 +43,13 @@ git -C "$src" submodule update -q --init --depth 1 ggml
 git -C "$src" checkout -q -- .
 git -C "$src/ggml" checkout -q -- .
 for p in "$here"/patches/*.patch; do
-  git -C "$src" apply "$p"
+  case $(basename "$p") in
+    ggml-*) ;; # ggml patches go in the submodule, below
+    *) git -C "$src" apply "$p" ;;
+  esac
+done
+for p in "$here"/patches/ggml-*.patch; do
+  [ -e "$p" ] && git -C "$src/ggml" apply "$p"
 done
 
 # Vulkan's headers, SPIR-V's (installed, for its CMake config) and the
