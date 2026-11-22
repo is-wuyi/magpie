@@ -95,9 +95,17 @@ build() {
   local name=$1
   shift
   local b=$work/build-$target-$name
+  local diagnostics=()
+  if [ "${PF_DIAGNOSTICS:-0}" = 1 ] && [ "$target" = darwin-amd64 ] && [ "$name" = pf-serve ]; then
+    diagnostics=(-DPF_SERVE_DIAGNOSTICS=ON)
+  fi
   cmake -S "$here" -B "$b" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPF_SRC="$src" \
-    -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF "$@"
+    -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF "${diagnostics[@]}" "$@"
   cmake --build "$b" -j "$jobs" --target pf-serve
+  if [ ${#diagnostics[@]} -ne 0 ]; then
+    cmake --build "$b" -j "$jobs" --target test-backend-ops pf-cli
+    cp "$b/test-backend-ops" "$b/pf/pf-cli" "$stage/"
+  fi
   local exe=pf-serve
   case $target in windows-*) exe=pf-serve.exe ;; esac
   cp "$b/$exe" "$stage/$name${exe#pf-serve}"

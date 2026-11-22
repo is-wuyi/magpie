@@ -2,14 +2,11 @@ diff --git a/src/ggml-metal/ggml-metal-device.m b/src/ggml-metal/ggml-metal-devi
 index d583bd6..1fe387b 100644
 --- a/src/ggml-metal/ggml-metal-device.m
 +++ b/src/ggml-metal/ggml-metal-device.m
-@@ -695,8 +695,10 @@ ggml_metal_device_t ggml_metal_device_init(int device) {
+@@ -695,6 +695,7 @@ ggml_metal_device_t ggml_metal_device_init(int device) {
              dev->props.device = device;
              dev->props.has_simdgroup_reduction  = [dev->mtl_device supportsFamily:MTLGPUFamilyApple7];
              dev->props.has_simdgroup_reduction |= [dev->mtl_device supportsFamily:MTLGPUFamilyMetal3_GGML];
 +            dev->props.has_simdgroup_reduction |= [dev->mtl_device supportsFamily:MTLGPUFamilyMac2];
  
              dev->props.has_simdgroup_mm = [dev->mtl_device supportsFamily:MTLGPUFamilyApple7];
-+            dev->props.has_simdgroup_mm |= [dev->mtl_device supportsFamily:MTLGPUFamilyMac2];
              dev->props.has_unified_memory = dev->mtl_device.hasUnifiedMemory;
- 
-             dev->props.has_bfloat  = [dev->mtl_device supportsFamily:MTLGPUFamilyMetal3_GGML];

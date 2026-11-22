@@ -42,6 +42,8 @@ jobs:
         if: matrix.target == 'windows-amd64'
         run: sudo apt-get update && sudo apt-get install -y ninja-build mingw-w64 glslc zip
       - name: build
+        env:
+          PF_DIAGNOSTICS: "1"
         run: native/privacy-filter/build.sh ${{ matrix.target }} pf-serve-${{ matrix.target }}.zip
       - name: starts
         # each program the runner can start runs to its usage line
