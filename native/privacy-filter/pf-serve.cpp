@@ -119,8 +119,16 @@ int main(int argc, char ** argv) {
     // the GPU's kernels are built on first use, a second or more: here,
     // not on a request
     // in a short text and longer ones, as kernels are picked by size
+    std::vector<int> warm_sizes = {0, 1, 12, 48};
+#if defined(__APPLE__) && defined(__x86_64__)
+    // The compatible Metal graph uses explicit attention. Prime its kernel
+    // sizes without spending the GPU load deadline on a long quadratic pass.
+    if (device.compare(0, 4, "MTL:") == 0) {
+        warm_sizes = {0, 1, 4};
+    }
+#endif
     std::string warm = "Hi Bob";
-    for (int n : {0, 1, 12, 48}) {
+    for (int n : warm_sizes) {
         while ((int) warm.size() < n * 160) {
             warm += " Ask Jane Doe at jane.doe@example.com or +1 415 555 0100 about 221B Baker Street, account 12345678.";
         }
