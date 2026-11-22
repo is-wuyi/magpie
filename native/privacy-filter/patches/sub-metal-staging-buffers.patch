@@ -1,0 +1,47 @@
+--- a/src/ggml-metal/ggml-metal-device.m
++++ b/src/ggml-metal/ggml-metal-device.m
+@@ -1713,11 +1713,10 @@
+ 
+     @autoreleasepool {
+         // src
+-        void * data_ptr = (void *)(uintptr_t) data; // "const cast" the src data
+-        id<MTLBuffer> buf_src = [buf->dev->mtl_device newBufferWithBytesNoCopy:data_ptr
++        // Caller-owned arrays need not satisfy Metal's no-copy alignment.
++        id<MTLBuffer> buf_src = [buf->dev->mtl_device newBufferWithBytes:data
+                                                                length:size
+-                                                              options:MTLResourceStorageModeShared
+-                                                          deallocator:nil];
++                                                              options:MTLResourceStorageModeShared];
+ 
+         GGML_ASSERT(buf_src);
+ 
+@@ -1754,6 +1753,7 @@
+ 
+         dispatch_semaphore_wait(completion_semaphore, DISPATCH_TIME_FOREVER);
+         dispatch_release(completion_semaphore);
++        [buf_src release];
+ 
+         //[cmd_buf waitUntilCompleted];
+     }
+@@ -1771,10 +1771,8 @@
+         bid_src.offs += offset;
+ 
+         // dst
+-        id<MTLBuffer> buf_dst = [buf->dev->mtl_device newBufferWithBytesNoCopy:data
+-                                                               length:size
+-                                                              options:MTLResourceStorageModeShared
+-                                                          deallocator:nil];
++        id<MTLBuffer> buf_dst = [buf->dev->mtl_device newBufferWithLength:size
++                                                               options:MTLResourceStorageModeShared];
+ 
+         GGML_ASSERT(buf_dst);
+ 
+@@ -1794,6 +1792,8 @@
+ 
+         [cmd_buf commit];
+         [cmd_buf waitUntilCompleted];
++        memcpy(data, buf_dst.contents, size);
++        [buf_dst release];
+     }
+ }
+ 

@@ -42,6 +42,17 @@ three.
 
 ## Constraints and failure behavior
 
+### Privacy Filter's local device
+
+`internal/pii` starts Privacy Filter in its own `pf-serve` process and tries
+GPU candidates before CPU fallback. Both macOS helper builds include Metal;
+the Intel base helper stays CPU-only for processors without AVX2. The
+compatible discrete-Metal path keeps graph execution ordered and falls back
+to explicit attention when the backend does not support Flash Attention.
+Native build details, device limitations and target-machine checks are in
+[the helper reference](../../native/privacy-filter/README.md). The GUI's model
+choice and status continue to come from [`internal/pii`](../../internal/pii/serve.go).
+
 ### First opening of an agent's Details
 
 In the main window, `expandLink` in

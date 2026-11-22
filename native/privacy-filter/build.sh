@@ -7,7 +7,7 @@
 # windows-amd64) gets two programs: pf-serve-vulkan, linked to the Vulkan
 # loader the GPU's driver installs, and pf-serve, the CPU's alone, for a
 # computer with no loader, where pf-serve-vulkan can't start at all.
-# darwin-arm64's pf-serve uses Metal. Each x86 target also gets
+# darwin's pf-serve uses Metal. Each x86 target also gets
 # pf-serve-base, built for SSE4.2 alone: pf-serve's AVX2, FMA, F16C and
 # BMI2 end it with SIGILL on a CPU without them (a Celeron, a Pentium, a
 # Mac before Haswell) and under Rosetta before macOS 15, and magpie runs
@@ -43,7 +43,11 @@ git -C "$src" submodule update -q --init --depth 1 ggml
 git -C "$src" checkout -q -- .
 git -C "$src/ggml" checkout -q -- .
 for p in "$here"/patches/*.patch; do
-  git -C "$src" apply "$p"
+  case $(basename "$p") in
+    # sub-* patches are against ggml's own tree, not the fork's ggml/ path
+    sub-*) git -C "$src/ggml" apply "$p" ;;
+    *) git -C "$src" apply "$p" ;;
+  esac
 done
 
 # Vulkan's headers, SPIR-V's (installed, for its CMake config) and the
@@ -91,9 +95,18 @@ build() {
   local name=$1
   shift
   local b=$work/build-$target-$name
+  local diagnostics=OFF
+  if [ "${PF_DIAGNOSTICS:-0}" = 1 ] && [ "$target" = darwin-amd64 ] && [ "$name" = pf-serve ]; then
+    diagnostics=ON
+  fi
   cmake -S "$here" -B "$b" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPF_SRC="$src" \
-    -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF "$@"
+    -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF \
+    -DPF_SERVE_DIAGNOSTICS="$diagnostics" "$@"
   cmake --build "$b" -j "$jobs" --target pf-serve
+  if [ "$diagnostics" = ON ]; then
+    cmake --build "$b" -j "$jobs" --target test-backend-ops pf-cli
+    cp "$b/test-backend-ops" "$b/pf/pf-cli" "$stage/"
+  fi
   local exe=pf-serve
   case $target in windows-*) exe=pf-serve.exe ;; esac
   cp "$b/$exe" "$stage/$name${exe#pf-serve}"
@@ -108,7 +121,7 @@ case $target in
     ;;
   darwin-amd64)
     build pf-serve -DCMAKE_SYSTEM_NAME=Darwin -DCMAKE_SYSTEM_PROCESSOR=x86_64 -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-      -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DGGML_METAL=OFF -DGGML_BLAS=OFF "${x86[@]}"
+      -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON -DGGML_BLAS=OFF "${x86[@]}"
     build pf-serve-base -DCMAKE_SYSTEM_NAME=Darwin -DCMAKE_SYSTEM_PROCESSOR=x86_64 -DCMAKE_OSX_ARCHITECTURES=x86_64 \
       -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DGGML_METAL=OFF -DGGML_BLAS=OFF "${base[@]}"
     ;;

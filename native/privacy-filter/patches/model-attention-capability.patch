@@ -1,0 +1,36 @@
+--- a/src/model.cpp
++++ b/src/model.cpp
+@@ -254,8 +254,21 @@
+     // makes it a slight loss on short inputs; measured crossover ~2048 tok (CPU
+     // neutral-to-faster, Vulkan ~1.1x rising to ~2.5x at length). PF_BANDED forces
+     // it on (non-zero) or off (0). n here is one window's worth (<= the window).
++    // Probe the actual attention shape before selecting a fused graph. A
++    // backend can support the device but not Flash Attention (e.g. AMD Metal).
++    ggml_tensor * probe_q = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, n_rot, n, n_head, 1);
++    ggml_tensor * probe_k = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, n_rot, n, n_head_kv, 1);
++    ggml_tensor * probe_v = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, n_rot, n, n_head_kv, 1);
++    ggml_tensor * probe_fa = ggml_flash_attn_ext(ctx, probe_q, probe_k, probe_v, nullptr,
++                                               1.0f / std::sqrt((float) n_rot), 0.0f, 0.0f);
++    ggml_flash_attn_ext_set_prec(probe_fa, GGML_PREC_F32);
++    ggml_flash_attn_ext_add_sinks(probe_fa, layers[0].sinks);
++    const bool supports_flash = ggml_backend_supports_op(be.be, probe_fa);
++    const bool use_flash = supports_flash && !std::getenv("PF_NOFLASH");
++
+     const char * banded_env = std::getenv("PF_BANDED");
+-    const bool use_banded = banded_env ? (std::atoi(banded_env) != 0) : (n >= 2048);
++    const bool use_banded = use_flash &&
++                           (banded_env ? (std::atoi(banded_env) != 0) : (n >= 2048));
+     const int  Bsz   = 256;                          // block size (>= swa_radius 128)
+     const int  nbk   = use_banded ? (int) ((n + Bsz - 1) / Bsz) : 0;
+     const int  n_pad = nbk * Bsz;
+@@ -305,8 +318,8 @@
+     // no materialized scores, the backend skips out-of-band KV under the
+     // sliding-window mask, sinks carried via add_sinks, F32 accumulate. Validated
+     // exact (passes the f32 cos>=0.99999 gate) and ~2-2.4x faster on CPU and
+-    // Vulkan at length. PF_NOFLASH selects the explicit path (reference / debug).
+-    const bool use_flash = !std::getenv("PF_NOFLASH");
++    // Vulkan at length. The explicit path is used when the backend lacks the
++    // fused op, or PF_NOFLASH selects it for reference / debug.
+ 
+     // Banded block-local attention (PF_BANDED): q [d,n_head,n], k/v [d,n_head_kv,n]
+     // post-rope -> [n_head*d, n]. Each query block attends to blocks {i-1,i,i+1}

@@ -31,6 +31,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: protocol verifier tests
+        if: runner.os != 'Windows'
+        run: python3 -I native/privacy-filter/verify_test.py
       - name: tools (macOS)
         if: runner.os == 'macOS'
         run: brew install ninja
@@ -42,6 +45,8 @@ jobs:
         if: matrix.target == 'windows-amd64'
         run: sudo apt-get update && sudo apt-get install -y ninja-build mingw-w64 glslc zip
       - name: build
+        env:
+          PF_DIAGNOSTICS: ${{ startsWith(github.ref, 'refs/tags/pf-v') && '0' || '1' }}
         run: native/privacy-filter/build.sh ${{ matrix.target }} pf-serve-${{ matrix.target }}.zip
       - name: starts
         # each program the runner can start runs to its usage line
