@@ -44,12 +44,10 @@ git -C "$src" checkout -q -- .
 git -C "$src/ggml" checkout -q -- .
 for p in "$here"/patches/*.patch; do
   case $(basename "$p") in
-    ggml-*) ;; # ggml patches go in the submodule, below
+    # sub-* patches are against ggml's own tree, not the fork's ggml/ path
+    sub-*) git -C "$src/ggml" apply "$p" ;;
     *) git -C "$src" apply "$p" ;;
   esac
-done
-for p in "$here"/patches/ggml-*.patch; do
-  [ -e "$p" ] && git -C "$src/ggml" apply "$p"
 done
 
 # Vulkan's headers, SPIR-V's (installed, for its CMake config) and the
