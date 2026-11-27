@@ -73,7 +73,8 @@ ENV HOME=/config/home \
     NPM_CONFIG_UPDATE_NOTIFIER=false \
     UV_PYTHON_PREFERENCE=only-managed \
     UV_PYTHON=3.14 \
-    MAGPIE_ADDR=0.0.0.0:3425
+    MAGPIE_ADDR=0.0.0.0:3425 \
+    MAGPIE_CLOUD=1
 
 VOLUME /config
 
@@ -83,4 +84,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 EXPOSE 3425 3430
 
 ENTRYPOINT ["/magpie"]
-CMD ["serve"]
+CMD ["web", "--addr", "0.0.0.0:3430", "--no-open"]

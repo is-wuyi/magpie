@@ -44,6 +44,12 @@ type Record struct {
 	ProviderAccount string `json:"providerAccount,omitempty"`
 	CallerKeyID     string `json:"callerKeyId,omitempty"`
 	CallerKeyName   string `json:"callerKeyName,omitempty"`
+	// CloudUserID and HouseChannelID attribute a cloud call without
+	// exposing the upstream credential. BillingReservationID joins it to the
+	// durable wallet hold; none is set for local or BYOK calls.
+	CloudUserID          string `json:"cloudUserId,omitempty"`
+	HouseChannelID       string `json:"houseChannelId,omitempty"`
+	BillingReservationID string `json:"billingReservationId,omitempty"`
 	// CallerIssuerID is the key CallerKeyID was issued under (an issued,
 	// short-lived key: access.IssueKey), whose limits count this call too.
 	CallerIssuerID string `json:"callerIssuerId,omitempty"`

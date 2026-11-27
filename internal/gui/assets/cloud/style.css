@@ -1,0 +1,367 @@
+/* magpie cloud — the portal's own sheet. It takes the app's tokens and
+   surfaces (app.css) so the two read as one product, but it ships with the
+   cloud page alone: the portal is served without the app's scripts or
+   stylesheet, and nothing here may reach outside this folder. */
+
+:root {
+  --bg: #f4f4f6;
+  --card: #ffffff;
+  --card-2: #f9f9fb;
+  --pill: #f1f1f4;
+  --pill-hover: #e9e9ee;
+  --line: #e3e3e8;
+  --line-2: #ececf0;
+  --fg: #1c1c21;
+  --fg-2: #4b4b53;
+  --muted: #85858d;
+  --faint: #b9b9c2;
+  --ctl-fg: #63636b;
+  --accent: #4f46e5;
+  --accent-soft: #eeedfd;
+  --accent-fg: #ffffff;
+  --green: #189a58;
+  --green-soft: #e4f6ec;
+  --red: #d64545;
+  --red-soft: #fbe9e9;
+  --amber: #b45309;
+  --amber-soft: #fbf0df;
+  --shadow: 0 16px 44px rgba(20, 22, 30, .16), 0 2px 8px rgba(20, 22, 30, .06), 0 0 0 .5px rgba(20, 22, 30, .1);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, "PingFang SC", "Hiragino Sans", "Microsoft YaHei", sans-serif;
+  --code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a1e;
+    --card: #232327;
+    --card-2: #1f1f23;
+    --pill: #2d2d33;
+    --pill-hover: #36363d;
+    --line: #333339;
+    --line-2: #2c2c32;
+    --fg: #ededf1;
+    --fg-2: #b9b9c1;
+    --muted: #9c9ca6;
+    --faint: #90909a;
+    --ctl-fg: #a1a1aa;
+    --accent: #a5b4fc;
+    --accent-soft: #2b2c47;
+    --accent-fg: #14142a;
+    --green: #6fd99b;
+    --green-soft: #1e3a2b;
+    --red: #f28b82;
+    --red-soft: #45272a;
+    --amber: #f2b544;
+    --amber-soft: #3f3220;
+    --shadow: 0 16px 44px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .3), 0 0 0 .5px rgba(255, 255, 255, .1);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.45 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+[hidden] { display: none !important; }
+
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: default; appearance: none; -webkit-appearance: none; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input, textarea { font: inherit; color: var(--fg); }
+code, .mono { font-family: var(--code); font-size: 12.5px; }
+
+/* the bar: the brand at the left, the language and the signed-in account at
+   the right, as the app's top bar is */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 max(14px, calc((100vw - 1040px) / 2));
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-2);
+}
+.brand { display: flex; align-items: center; gap: 7px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
+.brand .logo { display: inline-flex; color: var(--accent); }
+.brand-tag { color: var(--muted); font-weight: 500; }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.session { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.session-email { color: var(--fg-2); font-size: 12px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* the language picker: a quiet button and the app's own menu, never a
+   native select */
+.lang { position: relative; }
+.lang-btn { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 8px; color: var(--ctl-fg); font-size: 12px; }
+.lang-btn:hover, .lang-btn[aria-expanded="true"] { background: var(--pill); color: var(--fg); }
+.lang-btn svg { flex: none; }
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 148px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--fg);
+}
+.menu button:hover, .menu button:focus-visible { background: var(--pill); }
+.menu .mark { width: 14px; flex: none; color: var(--accent); font-weight: 700; }
+
+/* the page */
+.shell {
+  width: min(1040px, 100%);
+  margin: 0 auto;
+  padding: 26px 14px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* an outcome floats over the page's foot, as the app's status line does: it
+   stays in sight wherever the action was, and a notice that stood in the
+   page's flow would push every card down and be read only at the top */
+.notice {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: min(560px, calc(100vw - 24px));
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.45;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+.notice::before { content: ""; flex: none; width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--green); }
+.notice[data-tone="error"] { color: var(--red); pointer-events: auto; }
+.notice[data-tone="error"]::before { background: var(--red); }
+
+/* sign in: one quiet card under the product's name, with no account
+   enumeration: every address gets the same answer */
+.signin { display: flex; flex-direction: column; gap: 18px; padding-top: 7vh; align-items: center; }
+.hero { text-align: center; max-width: 520px; }
+.hero h1 { margin: 0 0 7px; font-size: 25px; font-weight: 600; letter-spacing: -.01em; }
+.hero-sub { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.auth-card { width: min(430px, 100%); padding: 20px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; gap: 14px; }
+.auth-card .field { margin: 0; }
+.auth-go { height: 34px; border-radius: 9px; font-size: 13px; }
+.auth-alt { display: flex; flex-wrap: wrap; gap: 2px; margin: -4px 0 0; }
+.foot-note { margin: 2px 0 0; color: var(--faint); font-size: 11.5px; line-height: 1.5; }
+
+/* cards, as the app's lists: white, a hairline, rounded */
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.panel-head { display: flex; align-items: center; gap: 12px; padding: 13px 15px; border-bottom: 1px solid var(--line-2); }
+.panel-head .grow { flex: 1; min-width: 0; }
+.panel-head h2 { margin: 0; font-size: 13.5px; font-weight: 600; letter-spacing: -.005em; }
+.panel-desc { margin: 2px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.panel-body { padding: 0; }
+
+.rows { list-style: none; margin: 0; padding: 0; }
+.row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 9px 15px; }
+.row + .row, .row + .form, .form + .row { border-top: 1px solid var(--line-2); }
+.row-main { flex: 1 1 auto; min-width: 0; }
+.row-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.row-name .name { font-weight: 500; letter-spacing: -.005em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.row-sub { margin-top: 2px; color: var(--muted); font-size: 11.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.row-sub.mono { font-size: 11.5px; }
+.row-actions { display: flex; align-items: center; gap: 6px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--pill); color: var(--muted); font-size: 11px; white-space: nowrap; }
+.pill::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
+.pill.ok { background: var(--green-soft); color: var(--fg-2); }
+.pill.ok::before { background: var(--green); }
+.pill.warn { background: var(--amber-soft); color: var(--fg-2); }
+.pill.warn::before { background: var(--amber); }
+.pill.off { color: var(--muted); }
+.pill.role { background: var(--accent-soft); color: var(--fg-2); }
+.pill.role::before { background: var(--accent); }
+.pill.revoked { background: var(--red-soft); color: var(--fg-2); }
+.pill.revoked::before { background: var(--red); }
+
+/* controls: pop-up buttons and fields, as the app draws them */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 27px;
+  padding: 0 11px;
+  border-radius: 7px;
+  background: var(--pill);
+  color: var(--fg);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) { background: var(--pill-hover); }
+.btn.primary { background: var(--accent); color: var(--accent-fg); font-weight: 500; }
+.btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.06); }
+.btn.ghost { background: none; color: var(--ctl-fg); }
+.btn.ghost:hover:not(:disabled) { background: var(--pill); color: var(--fg); }
+.btn.danger { color: var(--red); }
+.btn.danger:hover:not(:disabled) { background: var(--red-soft); }
+.btn:disabled { opacity: .5; }
+.btn.small { height: 24px; padding: 0 9px; font-size: 12px; }
+
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field > span:first-child { font-size: 12px; font-weight: 500; color: var(--fg-2); }
+.input, .textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 13px;
+  outline: none;
+}
+.input:focus, .textarea:focus { border-color: var(--accent); }
+.textarea { resize: vertical; min-height: 58px; line-height: 1.45; }
+.input::placeholder, .textarea::placeholder { color: var(--faint); }
+.hint { color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+.form-error { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--red-soft); color: var(--red); font-size: 12px; line-height: 1.45; }
+.form-hint { margin: 0; color: var(--green); font-size: 12px; line-height: 1.45; }
+.form-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 8px; background: var(--pill); align-self: flex-start; }
+.seg button { height: 23px; padding: 0 10px; border-radius: 6px; color: var(--ctl-fg); font-size: 12px; }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); font-weight: 500; }
+.seg button:hover:not([aria-pressed="true"]) { color: var(--fg-2); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { height: 25px; padding: 0 10px; border-radius: 13px; background: var(--pill); color: var(--ctl-fg); font-size: 12px; }
+.chip:hover { background: var(--pill-hover); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* a form inside a panel: the same margins as a row */
+.form { padding: 14px 15px; display: flex; flex-direction: column; gap: 12px; background: var(--card-2); }
+.form-title { margin: 0; font-size: 12.5px; font-weight: 600; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-actions { display: flex; align-items: center; gap: 6px; padding-top: 2px; }
+
+/* the created key: the one time the secret is ever on the page */
+.once { margin: 12px 15px; padding: 13px; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--line-2); }
+.once h3 { margin: 0 0 3px; font-size: 12.5px; font-weight: 600; }
+.once p { margin: 0 0 9px; color: var(--fg-2); font-size: 11.5px; }
+.once-key { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.once-key code { flex: 1 1 220px; min-width: 0; padding: 8px 10px; border-radius: 8px; background: var(--card); overflow-wrap: anywhere; user-select: all; }
+.once-key code:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.once-actions { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
+
+/* the balance: three quiet figures, as the key page's usage */
+.wallet-balance { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 14px 15px; border-bottom: 1px solid var(--line-2); }
+.wstat { min-width: 0; }
+.wstat > span { display: block; color: var(--muted); font-size: 11.5px; }
+.wstat strong { display: block; margin-top: 2px; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.wallet-note { padding: 12px 15px; }
+.wallet-note + .wallet-note { padding-top: 0; }
+
+/* a recharge order: what is paid, where, and how it is going */
+.pay-box { margin: 12px 15px; padding: 13px; display: flex; flex-direction: column; gap: 9px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.pay-box .row-name { padding: 0; }
+.pay-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.pay-code { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.pay-code code { flex: 1 1 220px; min-width: 0; padding: 8px 10px; border-radius: 8px; background: var(--card-2); overflow-wrap: anywhere; user-select: all; }
+.pay-box .form-actions { padding-top: 0; }
+.order-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.order-note.ok { color: var(--green); }
+.order-note.bad { color: var(--red); }
+
+/* a house channel's prices, opened under its admin row */
+.price-panel { padding: 14px 15px; border-top: 1px solid var(--line-2); background: var(--card-2); }
+.price-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.price-head h3 { flex: 1; min-width: 0; margin: 0; font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
+.price-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.price-item { padding: 9px 11px; border: 1px solid var(--line-2); border-radius: 9px; background: var(--card); }
+.price-item .mono { overflow-wrap: anywhere; }
+.price-rates { margin-top: 3px; color: var(--muted); font-size: 11.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.price-panel .form { padding: 12px 0 0; background: transparent; }
+.price-panel .state { padding: 12px 0; }
+.price-panel .state.empty { padding: 16px 0; }
+
+/* loading, empty and failed reads: one line each, in the list's own card */
+.state { padding: 18px 15px; color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 8px; }
+.state.empty { display: block; padding: 24px 15px; }
+.state.empty .state-title { color: var(--fg-2); font-weight: 500; margin-bottom: 2px; }
+.state.error { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--red); }
+.state.error .state-text { color: var(--red); }
+.spinner { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: cloud-spin .8s linear infinite; }
+@keyframes cloud-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; border-top-color: var(--line); }
+}
+
+@media (max-width: 720px) {
+  .top { height: 48px; padding: 0 12px; }
+  .brand-tag { display: none; }
+  .session-email { max-width: 150px; }
+  .shell { padding: 18px 10px 56px; gap: 12px; }
+  .panel-head { padding: 12px; }
+  .row { padding: 10px 12px; flex-wrap: wrap; gap: 8px; }
+  .row-actions { width: 100%; justify-content: flex-start; }
+  .row-actions .btn { flex: none; }
+  .form { padding: 12px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .once { margin: 10px 12px; }
+  .wallet-balance { padding: 12px; gap: 8px; }
+  .wstat strong { font-size: 14px; }
+  .wallet-note { padding: 12px; }
+  .pay-box { margin: 10px 12px; padding: 12px; }
+  .price-panel { padding: 12px; }
+  .signin { padding-top: 3vh; }
+  .hero h1 { font-size: 22px; }
+}
+
+@media (max-width: 430px) {
+  .session-email { max-width: 200px; }
+  .session .pill.role { display: none; }
+  .lang-btn span { display: none; }
+  .lang-btn { width: 28px; padding: 0; justify-content: center; }
+  .notice { bottom: 12px; max-width: calc(100vw - 20px); }
+}
+
+.credit-panel, .providers-panel {
+  padding: 16px;
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card-alt, var(--card));
+}
+.credit-panel .form { gap: 10px; }
+.credit-panel .input { width: min(100%, 360px); }
+.providers-panel .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.providers-panel .rows { margin-top: 12px; }
+.usage-cost { white-space: nowrap; }
+@media (max-width: 520px) {
+  .credit-panel, .providers-panel { padding: 12px; }
+  .credit-panel .form-actions, .providers-panel .row-actions { flex-wrap: wrap; }
+  #groupForm .form-grid { grid-template-columns: 1fr; }
+}

@@ -14,6 +14,7 @@ import (
 
 	"github.com/yetone/magpie/internal/access"
 	"github.com/yetone/magpie/internal/provider"
+	"github.com/yetone/magpie/internal/usage"
 )
 
 // AlphaSearchPath is where Codex's own web search, its web.run tool, goes:
@@ -226,6 +227,10 @@ func (s *Server) alphaSearchAsked(w http.ResponseWriter, r *http.Request, body [
 	var errs []string
 	for _, t := range ts {
 		on, model := t.p, t.model
+		if err := reserveCloudAttempt(r, on, model, withModel(body, model)); err != nil {
+			errs = append(errs, on.Name+": house-channel billing refused the request: "+err.Error())
+			continue
+		}
 		who := on.Name + ": "
 		if on.Account != nil {
 			who = "OpenAI (" + on.Account.User + "): "
@@ -265,6 +270,7 @@ func (s *Server) alphaSearchAsked(w http.ResponseWriter, r *http.Request, body [
 			if r.Context().Err() != nil {
 				return true, ""
 			}
+			appendUsage(r, usage.Record{Time: start, Agent: callerOf(r).agent, Via: callerOf(r).via, Provider: on.ID, Model: model, Requested: model, Millis: time.Since(start).Milliseconds(), Status: http.StatusBadGateway, Kind: "web_search"})
 			errs = append(errs, who+err.Error())
 			continue
 		}
@@ -276,6 +282,7 @@ func (s *Server) alphaSearchAsked(w http.ResponseWriter, r *http.Request, body [
 			res.Body.Close()
 			errs = append(errs, who+res.Status+": "+strings.TrimSpace(string(msg)))
 			c.Millis, c.Error = time.Since(start).Milliseconds(), res.Status
+			appendUsage(r, usage.Record{Time: start, Agent: c.Agent, Via: c.Via, Provider: on.ID, Model: model, Requested: model, Millis: c.Millis, Status: res.StatusCode, Kind: "web_search"})
 			s.record(c)
 			continue
 		}
@@ -288,6 +295,7 @@ func (s *Server) alphaSearchAsked(w http.ResponseWriter, r *http.Request, body [
 		io.Copy(w, res.Body)
 		res.Body.Close()
 		c.Millis = time.Since(start).Milliseconds()
+		appendUsage(r, usage.Record{Time: start, Agent: c.Agent, Via: c.Via, Provider: on.ID, Model: model, Requested: model, Millis: c.Millis, Status: res.StatusCode, Kind: "web_search"})
 		s.record(c)
 		return true, ""
 	}

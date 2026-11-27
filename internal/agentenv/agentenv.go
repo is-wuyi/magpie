@@ -168,6 +168,8 @@ var Vars = []string{
 	// Google Cloud's credentials file and gcloud's folder, which Vertex AI's
 	// tokens are minted from (and Gemini CLI's own, on Vertex AI)
 	"GOOGLE_APPLICATION_CREDENTIALS", "CLOUDSDK_CONFIG",
+	// Operator-controlled VPC upstreams; not a path.
+	"MAGPIE_ALLOW_PRIVATE_UPSTREAMS",
 }
 
 // NotPaths are the Vars that name no folder or file under the working
@@ -184,6 +186,8 @@ var NotPaths = map[string]bool{
 	"MAGPIE_ZED_BIN":      true, "MAGPIE_ZED_PROCESS_NAMES": true,
 	"PENGUIN_PROJECT_ID": true,
 	"OPENCLAW_PROFILE":   true,
+	// Deployment-level switch for operator-controlled VPC upstreams.
+	"MAGPIE_ALLOW_PRIVATE_UPSTREAMS": true,
 }
 
 // ClaudeProviders are Claude Code's switches that send its requests to a

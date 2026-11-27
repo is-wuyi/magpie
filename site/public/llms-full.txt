@@ -10769,221 +10769,77 @@ Questions or a setup worth sharing? Ask on [Discord](https://discord.gg/vGSnD3ZK
 
 Source: https://usemagpie.ai/docs/docker
 
-# magpie in Docker
+# magpie Cloud in Docker
 
-Run magpie on a server or a NAS that has no desktop: its gateway serves your models to agents on other computers, and you add providers and sign in to subscriptions from a page in your browser.
+A multi-user AI relay with email-code sign-in, user-owned keyed providers, admin-published house channels, per-model CNY pricing and a transactional prepaid wallet.
 
-| **Image** | `ghcr.io/yetone/magpie`, for `linux/amd64` and `linux/arm64` |
+> **Cloud mode is not the old single-owner browser console.** Agents, Sessions, Library, Memory, MCP, subscription/OAuth providers and arbitrary plugin installation are not available. PostgreSQL is required. Do not expose an older `serve` container or a `MAGPIE_WEB_KEY` admin page to users.
+
+| **Tags** | `latest` (the newest release), `daily` (once a day at 20:00 UTC), `stable` (one release a week), `0.1.1150` (one release), `0.1`, `edge` (every change on main) |
 | --- | --- |
-| **Tags** | `latest` (the newest release), `daily` (the desktop app's Daily channel: once a day at 20:00 UTC, the newest release whose CI run passed, or an urgent one at once), `stable` (the desktop app's Stable channel: a release a week, out three days first, or an urgent one at once), `0.1.1150` (one release), `0.1`, `edge` (every change on `main`) |
-| **Ports** | `3425` the gateway agents call; `3430` the browser UI, when the container runs `magpie web`; it answers the gateway’s `/v1` routes too, so a reverse proxy needs only this port |
-| **Volume** | `/config`: providers, keys, sign-ins, plugins and usage |
-| **User** | nonroot (uid 65532) |
+| Component | Purpose |
+| magpie on `3430` | The cloud portal and authenticated gateway routes; one reverse-proxy location is enough |
+| PostgreSQL 16 | Users, sessions, encrypted providers, grants, API keys, prices, wallet, usage and payment orders |
+| magpie on `3425` | Gateway listener on the private container network; it need not be published separately |
+| Volumes | `postgres-data` for the database and `magpie-config` for the runtime cache |
 
-The image holds magpie’s terminal-only build on Debian 13 slim, with bash for a terminal in the container and curl for the installers of the CLIs some subscriptions sign in with (Cursor, Devin, Grok Build). It runs `magpie serve` (the gateway alone) unless given another command. The container finds no agents to wire, so magpie in it is a gateway: the agents that use it run elsewhere.
+## Start with Compose
 
-## Run it
-
-Run it with the browser UI, a key for that page you keep across restarts, and both ports on the host’s loopback only:
-
-```
-docker run -d --name magpie --restart unless-stopped \
-  -p 127.0.0.1:3425:3425 -p 127.0.0.1:3430:3430 \
-  -e MAGPIE_WEB_KEY=$(openssl rand -hex 16) \
-  -v magpie-config:/config \
-  ghcr.io/yetone/magpie:latest web --addr 0.0.0.0:3430 --no-open
-
-docker logs magpie
-```
-
-The log names the page with its key:
+The checkout includes `compose.yaml` and `.env.example`. Copy the example, replace every required secret, then build and start both services:
 
 ```
-● magpie web on http://127.0.0.1:3430/?k=0f3c9a1e…
-  on the network http://172.17.0.2:3430/?k=0f3c9a1e…
-  these are the container's own addresses: other machines use the host's, and MAGPIE_PUBLIC_URL=http://<host>:<port> puts it here
-  other containers on this host http://172.17.0.1:3425
-! anyone with the link can change magpie and see its keys, and the network carries it unencrypted
-  the link carries MAGPIE_WEB_KEY · gateway http://127.0.0.1:3425 · Ctrl-C to stop
+cp .env.example .env
+# Edit .env: database, auth and provider-encryption keys, admin email,
+# public HTTPS URL and SMTP are required.
+docker compose up -d --build
+docker compose ps
+docker compose logs magpie
 ```
 
-> **Agents outside the container need a gateway key.** In the container any key works. A request from the host or another machine is answered only with an enabled gateway key, and gets 401 without one: make one as in Gateway keys. `127.0.0.1:` in `-p` keeps a port on the host; leave it out, or name the host’s LAN or VPN address, for other machines to reach it.
+Generate independent secrets, for example `openssl rand -hex 32` for `MAGPIE_AUTH_SECRET` and `openssl rand -base64 32` for `MAGPIE_CONFIG_KEY`. Use a separate random `POSTGRES_PASSWORD`. Never commit `.env`.
 
-Without `web --addr 0.0.0.0:3430 --no-open` the container runs the gateway alone, which you then set up from a terminal in it (`docker exec -it magpie magpie provider add …`). A folder bind-mounted at `/config` works in place of the named volume, if uid 65532 can write it: `sudo chown -R 65532:65532 /volume1/docker/magpie/config`.
+Open `MAGPIE_PUBLIC_URL`. A verified address in `MAGPIE_ADMIN_EMAILS` becomes an administrator; every other verified registration is an ordinary user. Users can create their own keyed providers and API keys, add published house channels, recharge and inspect their balance. Administrators create house channels, add upstream key pools, set model prices and publish or take channels offline.
 
-## The browser UI
+## Required environment
 
-Open the link from the log. The key in it is traded for a cookie and taken out of the address; a page opened without it is turned away (401). With `MAGPIE_WEB_KEY` set (16 or more letters, digits or `- . _ ~`; `openssl rand -hex 16` makes one) the key stays the same across restarts and the browser stays signed in for 400 days. Without it, every start makes a new key and the cookie lasts the browser session.
-
-The page is in **gateway mode**: Providers, Gateway, Routing, Usage, Sessions, Plugins and Settings, with no Agents, since there are no agents in the container. Library has its MCP servers, with the MCP router: other computers’ apps connect at the router’s address with a gateway key. Beside them are its Skills and Instructions: a magpie on another computer that adds this one as an Another computer’s magpie provider, with Use its skills and prompts on, takes them and gives them to its own agents, since a skill is a folder on the agent’s computer. Sessions lists only the sessions of agents on other computers that came through this gateway, never this machine’s agents’ files. Settings → General → Gateway mode turns it off.
-
-On a NAS or a server you reach over SSH, open the page through a tunnel rather than publishing 3430: `ssh -L 3430:127.0.0.1:3430 you@nas`, then the log’s link on your own computer.
-
-> **Anyone with the link can change magpie and see its keys.** Keep 3430 on loopback or a VPN. Across the network, serve it over HTTPS: give magpie a certificate with `MAGPIE_TLS_CERT` and `MAGPIE_TLS_KEY`, or put it behind a reverse proxy with TLS, such as Caddy.
-
-## Sign in to subscriptions
-
-Add API keys on Providers as on the desktop. A subscription’s sign-in (ChatGPT, Claude…) opens the vendor’s page in your browser, and when you are done the vendor sends that browser back to `localhost`, for ChatGPT `http://localhost:1455/auth/callback?code=…`. That is your own computer, not the container, so the page doesn’t load. Copy its whole address from the address bar and paste it into the sign-in’s Callback URL field.
-
-The same from a terminal:
-
-```
-docker exec -it magpie magpie accounts add codex
-```
-
-Open the link it prints, sign in, then paste the address the browser ended on. The browser UI can also import sign-ins from a file.
-
-A Claude subscription is signed in to and answered through Claude Code, which the image doesn’t have. Have magpie download Anthropic’s own build first: it says the version, where it comes from and where it goes, asks, and checks the download’s SHA-256 against Anthropic’s manifest. It is kept in `/config/cache`, on the volume, so a new image keeps it, and magpie keeps it at Claude Code’s newest release by itself: it looks a minute after it starts and every six hours, and downloads a newer one the same way. Nothing needs installing again after an update. To hold a version, set `-e DISABLE_AUTOUPDATER=1`. `magpie accounts add claude` offers it too when Claude Code is missing.
-
-```
-docker exec -it magpie magpie claude-code install
-```
-
-A Grok (SuperGrok) subscription signs in through xAI’s Grok Build CLI, which the image doesn’t have either. Its sign-in, in the browser UI or with `magpie plugin login grok`, installs it first, as xAI’s installer does: the stable version from `x.ai/cli`, kept in `/config/home/.grok`. To use a Grok Build binary you put on the volume yourself, set `GROK_BIN_DIR` to the folder holding it.
-
-## MCP servers
-
-The Library’s MCP servers run in the container, and the image has what they start with: `npx`, `node` and `npm` (Node 24), and `uvx`, `uv`, `python` and `python3`. A server started with `uvx` or `python` downloads its Python into the volume the first time, which takes a few seconds. A server started with `docker` doesn’t run: the container has no Docker of its own.
-
-The image has no browser. Chrome DevTools’ and Playwright’s MCP servers start a Chrome of their own, so in the container their row in the Library says no Chrome here. Use Magpie Browser instead, which acts in your own browser, or point the server at a Chrome it can reach: `--browserUrl http://host:9222` for Chrome DevTools, `--cdp-endpoint` for Playwright.
-
-## Your own browser
-
-Magpie Browser lets agents act in your own browser, through its extension. The extension can’t be loaded from the container’s folders, so in the browser UI open Library → Magpie Browser and click Download the extension. The zip is pointed at the page’s own address, with a gateway key named **Magpie Browser** of its own. Unzip it, open `chrome://extensions`, turn on Developer mode and click Load unpacked on the unzipped folder. An extension already loaded takes the address (`http://localhost:3430`, or the gateway’s published port) and a gateway key in its popup.
-
-The Magpie Browser key connects the extension and nothing else: it can’t use models, MCP servers or stats, so a copy of the zip left in Downloads spends nothing. The host’s browser reaches the container from Docker’s bridge, not from the container’s own computer, so it is that key’s alone and the container’s agents don’t use it yet ([#5529](https://github.com/yetone/magpie/issues/5529)). To use it from an agent on the host, give that agent a gateway key of its own with full access, connect the extension with the same key in its popup, and call `/mcp/magpie/browser` with it. A browser given another key is that key’s alone, and it is let go once its key is turned off, removed or rotated.
-
-## What is kept
-
-Everything magpie writes is under `/config`, so a restart, or a new container on the same volume, keeps your providers, keys, sign-ins and plugins.
-
-| Path | Holds |
+| Variable | Meaning |
 | --- | --- |
-| `/config/magpie` | magpie’s own files: `settings.json`, providers, gateway keys, routing groups |
-| `/config/home` | the container’s `HOME`: sign-ins kept where their agent keeps them (`~/.codex`, `~/.claude`…) |
-| `/config/cache` | the model catalog, Bun, which plugins run on (downloaded the first time one is used), and the Claude Code `magpie claude-code install` downloaded |
-| `/config/data`, `/config/state` | the rest of what magpie keeps |
+| `MAGPIE_CLOUD=1` | Selects the multi-user server and removes the local management plane |
+| `MAGPIE_DATABASE_URL` | PostgreSQL connection URL; Compose builds it from `POSTGRES_PASSWORD` |
+| `MAGPIE_AUTH_SECRET` | At least 32 random bytes for email-code and session HMAC keys |
+| `MAGPIE_CONFIG_KEY` | Base64 or hex encoding of exactly 32 bytes for provider-config AES-GCM |
+| `MAGPIE_ADMIN_EMAILS` | Comma-separated administrator allow-list, effective only after email verification |
+| `MAGPIE_PUBLIC_URL` | Public HTTPS origin, also used for payment callbacks |
+| `MAGPIE_SMTP_*` | SMTP host, port, credentials, sender and TLS mode used for login codes |
+| `MAGPIE_RECHARGE_PRESETS` | Server-owned CNY amounts; the browser cannot choose another amount |
 
-A volume made by an older image keeps working: magpie adds the folders it lacks when it starts. Only sign-ins made with that older image, which lived outside the volume, have to be made again.
+Keep these values stable across replicas and restarts. Changing `MAGPIE_CONFIG_KEY` makes existing provider ciphertext unreadable. Removing an administrator address does not demote an existing admin; change the user row through a controlled administrative migration instead.
 
-## Environment
+## Alipay and WeChat Pay
 
-| Variable | What it does |
-| --- | --- |
-| `MAGPIE_ADDR` | where the gateway listens. The image sets `0.0.0.0:3425`, so the published port reaches it. |
-| `MAGPIE_PUBLIC_URL` | the address other machines reach the gateway at, such as `http://192.168.1.20:3425` (the host’s or the NAS’s, on the published port), or a reverse proxy’s base URL. In the container magpie sees only Docker’s own `172.17.x` address; with this set, the address it shows and prints is the one to use. |
-| `MAGPIE_WEB_KEY` | the browser UI’s key, kept across restarts (16+ characters) |
-| `MAGPIE_NAME` | what this magpie is called: the browser tab’s title reads `<name> · magpie`, to tell several deployments apart. A name set on the page, in Settings → Network and sharing → Advanced → Name, comes first. |
-| `MAGPIE_TLS_CERT`, `MAGPIE_TLS_KEY` | a PEM certificate (its chain after it) and its key, mounted into the container: other machines then reach the gateway and the browser UI over `https://` only, and plain HTTP from them gets 400. The files are read again when they change, so a renewal needs no restart. One without the other, or files that don’t load, stop magpie from starting. Use `https://` in `MAGPIE_PUBLIC_URL` too. |
-| `MAGPIE_ALLOW_IPS` | the only addresses other machines may reach the gateway and the browser UI from, as IPs and CIDR ranges: `203.0.113.7,10.0.0.0/8,2001:db8::/32`. Any other address gets 403, even with a gateway key. Unset lets every address in, each with a key. See Allowed addresses. |
-| `MAGPIE_DRAIN` | how long a stop waits for the requests in flight, streams included: seconds (`300`) or a duration (`5m`); 20 seconds in Kubernetes and 7 elsewhere unless set (`docker stop` waits 10), `0` for 2. Past 10, give Docker as long: `docker stop -t`, Compose’s `stop_grace_period`. See Kubernetes. |
-| `HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` | set by the image to the folders under `/config` above; leave them |
+Recharge is disabled when neither provider is configured. Configure either or both; partial or invalid configuration fails startup rather than silently accepting payments.
 
-## Gateway keys and other machines
+- **Alipay:.** `ALIPAY_APP_ID`, `ALIPAY_PRIVATE_KEY`, `ALIPAY_PUBLIC_KEY`, optional `ALIPAY_SELLER_ID` and `ALIPAY_GATEWAY_URL`. The integration uses computer website payment and RSA2 asynchronous-notification verification.
+- **WeChat Pay:.** `WECHAT_APP_ID`, `WECHAT_MCH_ID`, `WECHAT_MERCHANT_SERIAL`, `WECHAT_PRIVATE_KEY`, the 32-byte `WECHAT_API_V3_KEY` and `WECHAT_PLATFORM_CERTIFICATES`. The integration uses API v3 Native and returns a `code_url` for a QR code.
 
-1. **Make a key for each client.** Gateway → Gateway keys, or in a terminal `docker exec magpie magpie gateway-key add "Laptop"`, which prints the new `sk-magpie-key-…`. Every request from outside the container, the host’s own included, must carry an enabled gateway key, and one without gets 401. A key can have its own daily, weekly, monthly, every-N-days or every-N-hours limit and its own list of models (`magpie gateway-key limit`, `magpie gateway-key models`).
-2. **Publish the port.** Recreate the container with `-p 3425:3425`, or bound to the NAS’s LAN or VPN address (`-p 192.168.1.20:3425:3425`), and with `-e MAGPIE_PUBLIC_URL=http://192.168.1.20:3425`.
+The callback paths are `/api/payments/alipay/notify` and `/api/payments/wechat/notify`. They must be publicly reachable over HTTPS without a login redirect. Settlement verifies signatures, merchant/app identity, order number, currency and amount. Database row locks and unique event/trade numbers prevent duplicate credits. Offline protocol tests do not replace a small real payment and callback-replay check for each merchant account.
 
-On each other computer, point the agent at the gateway with one of those keys as its API key: `http://192.168.1.20:3425/v1` for an OpenAI client, `http://192.168.1.20:3425` for an Anthropic or Gemini one. Model ids are `provider/model`, or a routing group’s; `GET /v1/models` lists them. If that computer runs magpie itself, add the container as a [Remote magpie](https://usemagpie.ai/docs/remote) instead, and magpie wires its agents for you.
+## Before opening it to users
 
-**Other containers on the same host.** Another container on the NAS reaches magpie at the host, through the Docker bridge’s gateway and the published port: `http://172.17.0.1:3425` on Docker’s default bridge. The container’s own `172.17.x` address is no use to it, and the host’s LAN address may not be either, as a NAS’s firewall can keep containers from it. `host.docker.internal` is the same address on Docker Desktop, and on Linux only in a container given `extra_hosts: ["host.docker.internal:host-gateway"]`. A container on magpie’s own compose network, or one you made, can use its name, `http://magpie:3425`. Either way it sends a gateway key. The log and the browser UI list this address as Other containers on this host, after the host’s address the page was opened at.
+- Terminate HTTPS at a trusted reverse proxy. Set `MAGPIE_AUTH_TRUST_PROXY_HEADERS=true` only when that proxy overwrites forwarding headers. Do not publish PostgreSQL or port 3425.
+- Provider egress refuses private, loopback, link-local and metadata addresses at the socket by default. Set `MAGPIE_ALLOW_PRIVATE_UPSTREAMS=1` only for operator-controlled VPC upstreams; never enable it to let a tenant reach arbitrary internal services.
+- Keep the nonroot container, database volume and encryption/auth secrets backed up. Back up PostgreSQL with point-in-time recovery; the runtime `/config` volume is not the financial source of truth.
+- Every house model needs an explicit current price. Unknown prices fail closed; an explicit zero price marks a free model. Price changes affect new reservations only.
+- Test two ordinary users for provider/model/usage isolation, and confirm house upstream keys never appear in API responses or logs. Loopback is not an authentication bypass in cloud mode.
+- Run real PostgreSQL concurrency and restart tests before selling balance. Verify duplicate, tampered, out-of-order and late payment callbacks. Live SMTP and merchant checks are separate release requirements.
 
-Settings → Network and sharing → Share on local network isn’t needed in the container: turning it on also makes a gateway key named Magpie, and the gateway asks for a key from outside the container either way.
+## Operations and upgrades
 
-**Upgrading from an earlier image.** An agent outside the container that sends `magpie`, or any other key that isn’t an enabled gateway key, now gets 401 (“the API key sent is not an enabled magpie gateway key”). Make it a key as above and put that in the agent’s settings. Agents that already send a gateway key, and a Remote magpie set up with one, keep working.
+Migrations are numbered, transactional, checksummed and run under a PostgreSQL advisory lock. A changed applied migration, a version gap or a newer schema stops startup. Back up before upgrading, then run `docker compose up -d --build`. Stop with `docker compose down`; do not use `down -v` unless you intentionally mean to destroy both volumes.
 
-**Allowed addresses.** On a public host, set `-e MAGPIE_ALLOW_IPS=203.0.113.7,10.0.0.0/8` to the addresses your clients come from. A request from any other address is refused 403 before its key is looked at, so a key that leaks is no use from elsewhere; the refusal names the address it came from, as does the container’s log. magpie judges the address of the connection itself, never an `X-Forwarded-For` header, and a mistyped entry lets nothing in rather than everything. Docker’s default bridge network passes a client’s own address into the container, but a request from the host itself arrives from the bridge’s gateway (`172.17.0.1`), and Docker Desktop and rootless Docker show every client as one address of their own: add that, or check what the 403 says. Behind a reverse proxy or tunnel, every request comes from the proxy’s address, so limit who reaches magpie at the proxy. On the desktop app the same list is Settings → Network and sharing → Allowed addresses.
+`GET /api/cloud/health` checks the portal's database connection. The image also keeps its gateway healthcheck and graceful drain. Background jobs recover expired holds and replay payment credits left pending by a failed post-callback write. Monitor these jobs and reconcile any reservation whose settlement failed; never clear wallet or payment rows manually.
 
-> **Over the internet, prefer a VPN** such as Tailscale or WireGuard to opening 3425. A reverse proxy or tunnel in front of the container is the network too: its clients need a gateway key like any other machine’s.
-
-**Claude Code’s status line, with Claude Code outside the container.** The status line square can’t reach another machine’s `~/.claude/settings.json`, and the command it writes names a binary in the container. The gateway answers the same line itself: on the machine Claude Code runs on, set `statusLine` in `~/.claude/settings.json` to `{"type": "command", "command": "curl -fsS -m 1 -H 'Authorization: Bearer sk-magpie-key-…' --data-binary @- http://<host>:3425/v1/magpie/statusline || true"}`, with the host or address that reaches the container and a gateway key (a read-only key is enough). A key held to a budget, models or accounts gets the line once its owner turns on Quotas for it, with only the accounts it may use. Add `?format=json` for the same as JSON (the line, the model, and each account’s windows with `used` and `resetsAt`), for a status line that draws its own. Claude Code runs it on every message and passes its session on stdin, which adds the model the session went to. The same command is shown in the browser UI under Settings → About.
-
-## Docker Compose on a NAS
-
-```
-services:
-  magpie:
-    image: ghcr.io/yetone/magpie:latest
-    restart: unless-stopped
-    ports:
-      # 127.0.0.1: the host alone; every caller outside the container needs a gateway key
-      - "127.0.0.1:3425:3425"
-      - "127.0.0.1:3430:3430"
-    environment:
-      MAGPIE_PUBLIC_URL: http://<nas-address>:3425
-      MAGPIE_WEB_KEY: <random-key>
-    volumes:
-      - ./config:/config
-    command: [web, --addr, 0.0.0.0:3430, --no-open]
-```
-
-Then: `sudo chown -R 65532:65532 ./config`, `docker compose up -d`, open `http://127.0.0.1:3430/?k=<random-key>` through an SSH tunnel, add your providers and make a gateway key for each machine. For other machines to reach the gateway, change its line to `"3425:3425"` (or the NAS’s LAN or VPN address) and run `docker compose up -d` again.
-
-## Health, terminal, updates
-
-- **Health..** The image has a `HEALTHCHECK`: `magpie healthcheck` exits 0 while the gateway answers, under `serve` and `web` alike, so `docker ps` shows the container as healthy and Compose can wait for it with `depends_on: condition: service_healthy`.
-- **Terminal..** `docker exec -it magpie bash`, or a NAS panel’s terminal, opens a shell with `magpie` on its PATH: `magpie providers`, `magpie models`, `magpie usage`, `magpie quota` and the rest of the [CLI](https://github.com/yetone/magpie/blob/main/docs/reference.md).
-- **Updates..** Pull the new image and recreate the container on the same volume: `docker pull ghcr.io/yetone/magpie:latest`, then `docker rm -f magpie` and the same `docker run`, or `docker compose pull && docker compose up -d`. magpie releases several times a day; for one update a day with Renovate or Watchtower, follow `daily` (with Renovate, pin its digest), or `stable` for one a week. When magpie finds an update, Settings › About names that version's own image (`docker pull ghcr.io/yetone/magpie:0.1.1150`): `latest` may hold a newer release than your update channel's; run the container from the tag you pulled.
-- **Build it yourself..** `docker build -t magpie .` in a checkout of [the repository](https://github.com/yetone/magpie) makes the same image.
-
-## Kubernetes
-
-A restart cuts nothing in flight, with nothing to set. On `SIGTERM` (a rolling update, `kubectl delete pod`, `docker stop`), `magpie serve` and `magpie web` fail their readiness check at once, keep accepting for 5 seconds while the Service stops sending them requests, then stop accepting and let the requests in flight finish, streams included, for up to 20 seconds.
-
-```
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: magpie
-spec:
-  replicas: 1
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1         # the new pod starts beside the old one
-      maxUnavailable: 0   # the old one ends once the new one is ready
-  selector:
-    matchLabels: {app: magpie}
-  template:
-    metadata:
-      labels: {app: magpie}
-    spec:
-      terminationGracePeriodSeconds: 30   # MAGPIE_DRAIN (20s) plus 10s to save
-      securityContext:
-        fsGroup: 65532
-      affinity:
-        podAffinity:   # the new pod on the old one's node, where the ReadWriteOnce volume is
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels: {app: magpie}
-              topologyKey: kubernetes.io/hostname
-      containers:
-        - name: magpie
-          image: ghcr.io/yetone/magpie:stable
-          ports:
-            - containerPort: 3425
-          readinessProbe:
-            exec:
-              command: [/magpie, healthcheck]
-            periodSeconds: 5
-          volumeMounts:
-            - name: config
-              mountPath: /config
-      volumes:
-        - name: config
-          persistentVolumeClaim:
-            claimName: magpie-config   # ReadWriteOnce
-```
-
-**Readiness.** Probe with `exec` and `magpie healthcheck`, as above: it asks from inside the container, so it needs no key. An `httpGet` probe comes from outside the container and would need a gateway key.
-
-**Longer turns.** An agent’s turn can stream for minutes. Raise `MAGPIE_DRAIN` and `terminationGracePeriodSeconds` together, the second 10 seconds above the first: `MAGPIE_DRAIN: "300"` with `terminationGracePeriodSeconds: 310`.
-
-**Rolling updates.** The new pod serves beside the old one on the same `/config`, and the Service sends it requests once it is ready; the old pod then drains as above, so no request is dropped. Each sign-in renewal and each saved file is locked across the pods. What only one magpie may do (renewing the saved sign-ins in the background, check-ins, plugin updates) the old pod keeps doing until it ends, and the new pod takes it over within a second. A ReadWriteOnce volume mounts on one node only, so the `podAffinity` above starts the new pod on the old one's node; with a ReadWriteMany volume, leave it out.
-
-**Updating from a version before v0.1.4526.** The old pod doesn't take part in that handover, so the two would both renew sign-ins for the length of the update. Make that one update with `strategy: Recreate`, then switch to the rolling update above.
-
-Questions or a setup worth sharing? Ask on [Discord](https://discord.gg/vGSnD3ZKQF). The [reference](https://github.com/yetone/magpie/blob/main/docs/reference.md#docker) has the details.
+Multiple replicas may share the database and its wallet transactions, but the provider catalog and local runtime cache are process-local. Refresh or restart every replica after changing providers, grants or prices, and keep the same auth/encryption keys. A rolling deployment should run migrations from one new instance first and allow old instances to drain.
 
 ---
 

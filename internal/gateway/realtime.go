@@ -184,7 +184,8 @@ func (s *Server) realtime(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusBadRequest, "a realtime session goes to one model: name a model, not the routing group "+asked)
 		return
 	}
-	p, model, code, msg := resolveRealtimeModel(asked)
+	keyWho := access.Caller(r.Context())
+	p, model, code, msg := resolveRealtimeModel(keyWho, asked)
 	if code != 0 {
 		refuse(code, msg)
 		return
@@ -193,9 +194,17 @@ func (s *Server) realtime(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusForbidden, msg)
 		return
 	}
+	if !providerAllowed(keyWho, p) {
+		refuse(http.StatusForbidden, "this API key may not use "+asked)
+		return
+	}
 	if keyWho, held := keyHolds(r); held && !modelAllowed(keyWho, p, model) {
 		st, msg := keyModelRefusal(w, keyWho, asked)
 		refuse(st, msg)
+		return
+	}
+	if err := reserveCloudAttempt(r, p, model, []byte(asked)); err != nil {
+		refuse(http.StatusPaymentRequired, "house-channel billing refused the request: "+err.Error())
 		return
 	}
 	tries, code, msg := s.onKeys(r, p, model, asked)
@@ -363,7 +372,7 @@ func realtimeSubprotocols(h http.Header) []string {
 // resolveRealtimeModel finds the model's provider as a chat's is found;
 // a bare id no provider lists (the Token Plan's hosts list nothing) goes
 // to the one DashScope provider turned on, when there is one.
-func resolveRealtimeModel(asked string) (provider.Provider, string, int, string) {
+func resolveRealtimeModel(who access.Identity, asked string) (provider.Provider, string, int, string) {
 	if p, model, ok := provider.Resolve(asked); ok {
 		return p, model, 0, ""
 	}
@@ -371,7 +380,7 @@ func resolveRealtimeModel(asked string) (provider.Provider, string, int, string)
 		return provider.Provider{}, "", http.StatusNotFound, switchedOff(off, asked)
 	}
 	if strings.Contains(asked, "/") {
-		return provider.Provider{}, "", http.StatusNotFound, unknownModel(asked, "")
+		return provider.Provider{}, "", http.StatusNotFound, unknownModel(who, asked, "")
 	}
 	var found []provider.Provider
 	for _, p := range provider.All() {
@@ -383,7 +392,7 @@ func resolveRealtimeModel(asked string) (provider.Provider, string, int, string)
 	case 1:
 		return found[0], asked, 0, ""
 	case 0:
-		return provider.Provider{}, "", http.StatusNotFound, unknownModel(asked, "")
+		return provider.Provider{}, "", http.StatusNotFound, unknownModel(who, asked, "")
 	}
 	ids := make([]string, len(found))
 	for i, p := range found {

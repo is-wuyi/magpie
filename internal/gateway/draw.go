@@ -772,7 +772,7 @@ func (s *Server) images(edit bool) http.HandlerFunc {
 			r = heldByGroup(r, g) // held to the group's accounts, if it is
 		}
 		keyWho, keyHeld := keyHolds(r)
-		if named && (isGroup && !groupGiven(r, keyWho, keyHeld, g, ms) || keyHeld && !isGroup && !modelAllowed(keyWho, p, model)) {
+		if !providerAllowed(keyWho, p) || isGroup && !membersCloudAllowed(keyWho, ms) || named && (isGroup && !groupGiven(r, keyWho, keyHeld, g, ms) || keyHeld && !isGroup && !modelAllowed(keyWho, p, model)) {
 			fail(keyModelRefusal(w, keyWho, d.Model))
 			return
 		}
@@ -842,6 +842,10 @@ func (s *Server) images(edit bool) http.HandlerFunc {
 		)
 		for i, m := range tries {
 			call.Provider, model = m.Provider.ID, m.Model
+			if err := reserveCloudAttempt(r, m.Provider, m.Model, []byte(d.Prompt)); err != nil {
+				fail(http.StatusPaymentRequired, "house-channel billing refused the request: "+err.Error())
+				return
+			}
 			drew, out, code, capBack, err = s.drawOnAccounts(ctx, memberOn(r, g, m), m.Provider, m.Model, d)
 			// a group's next member is asked as a chat's would be: while
 			// this one's vendor fails, is out of quota or doesn't serve the

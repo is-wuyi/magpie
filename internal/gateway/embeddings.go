@@ -121,7 +121,7 @@ func (s *Server) serveRetrieval(w http.ResponseWriter, r *http.Request, path, op
 		}
 	}
 	if !ok {
-		msg := unknownModel(asked, "")
+		msg := unknownModel(access.Caller(r.Context()), asked, "")
 		if off, isOff := provider.SwitchedOff(asked); isOff {
 			msg = switchedOff(off, asked)
 		}
@@ -291,6 +291,14 @@ func (s *Server) serveRetrieval(w http.ResponseWriter, r *http.Request, path, op
 			side.end(c.p, c.model, 400, err, Usage{})
 			call.Status, call.Error, call.Millis = 400, err.Error(), time.Since(start).Milliseconds()
 			writeError(w, provider.Chat, 400, err.Error())
+			s.record(call)
+			return
+		}
+		if err := reserveCloudAttempt(r, c.p, c.model, out); err != nil {
+			tried(http.StatusPaymentRequired, err)
+			side.end(c.p, c.model, http.StatusPaymentRequired, err, Usage{})
+			call.Status, call.Error, call.Millis = http.StatusPaymentRequired, err.Error(), time.Since(start).Milliseconds()
+			writeError(w, provider.Chat, http.StatusPaymentRequired, "house-channel billing refused the request: "+err.Error())
 			s.record(call)
 			return
 		}

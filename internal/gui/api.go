@@ -1227,6 +1227,15 @@ func Handler(w Windows, gw *gateway.Server) http.Handler {
 	}
 	mux := http.NewServeMux()
 	page := devPage(revalidated(http.FileServer(http.FS(staticFS()))))
+	mux.HandleFunc("GET /cloud/index.html", func(rw http.ResponseWriter, r *http.Request) {
+		b, err := fs.ReadFile(staticFS(), "cloud/index.html")
+		if err != nil {
+			http.NotFound(rw, r)
+			return
+		}
+		rw.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = rw.Write(b)
+	})
 	mux.Handle("/", http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		if warmsSessions(r) {
 			warmSessions()

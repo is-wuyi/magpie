@@ -79,6 +79,7 @@ func vendorTransport(wait time.Duration) *http.Transport {
 func plainVendorTransport(wait time.Duration) *http.Transport {
 	return &http.Transport{
 		Proxy:                 netproxy.Func,
+		DialContext:           (&net.Dialer{Control: cloudEgressControl}).DialContext,
 		ResponseHeaderTimeout: wait,
 		MaxIdleConnsPerHost:   8,
 		IdleConnTimeout:       90 * time.Second,

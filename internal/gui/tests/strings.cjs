@@ -28,6 +28,23 @@ function strings() {
       }
     }
   }
+  // The standalone cloud portal uses a small key-based dictionary rather
+  // than the window's English-text keys. Merge it for the shared guards, but
+  // do not subject it to the built-in plugins' "words are its own" rule.
+  const cloud = path.join(assets, "cloud", "i18n.js");
+  if (fs.existsSync(cloud)) {
+    const src = fs.readFileSync(cloud, "utf8");
+    const dict = new Function(src + "\n;return DICT;")();
+    files.push({ file: "cloud/i18n.js", src, dict, cloud: true });
+    for (const [lang, words] of Object.entries(dict)) {
+      const to = (I18N[lang] ||= {});
+      for (const [k, v] of Object.entries(words)) {
+        // The cloud dictionary is its own namespace; a core string with the
+        // same key is not a duplicate definition within one page.
+        if (!(k in to)) to[k] = v;
+      }
+    }
+  }
   return { I18N, files, twice };
 }
 

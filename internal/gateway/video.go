@@ -1136,7 +1136,7 @@ func (s *Server) videosCreate(w http.ResponseWriter, r *http.Request) {
 		r = heldByGroup(r, g) // held to the group's accounts, if it is
 	}
 	keyWho, keyHeld := keyHolds(r)
-	if named && (isGroup && !groupGiven(r, keyWho, keyHeld, g, ms) || keyHeld && !isGroup && !modelAllowed(keyWho, p, model)) {
+	if !providerAllowed(keyWho, p) || isGroup && !membersCloudAllowed(keyWho, ms) || named && (isGroup && !groupGiven(r, keyWho, keyHeld, g, ms) || keyHeld && !isGroup && !modelAllowed(keyWho, p, model)) {
 		fail(keyModelRefusal(w, keyWho, f.Model))
 		return
 	}
@@ -1368,6 +1368,9 @@ func (s *Server) startVideo(ctx context.Context, r *http.Request, p provider.Pro
 	if !v.remote && !v.custom && !volcengine && !minimax && !dashscope && !xai && (!drawsGrok(p) || !strings.HasPrefix(model, grokVideoFamily)) {
 		v.unfit = true
 		return v, 400, fmt.Errorf(`%s/%s can't make videos: magpie makes videos with a Grok subscription's or an xAI API key's grok-imagine-video, Volcengine Agent Plan's or an Ark key's Seedance models, a MiniMax API key's MiniMax-H3 models, an Alibaba Token Plan's Wan 3.0 and HappyHorse models, another magpie's, and a provider's models its own model list marks "kind": "video" or that you mark a Video model (right-click the model in the provider's editor: Makes…)`, p.ID, model)
+	}
+	if err := reserveCloudAttempt(r, p, model, []byte(f.Prompt)); err != nil {
+		return v, http.StatusPaymentRequired, errors.New("house-channel billing refused the request: " + err.Error())
 	}
 	// another magpie is asked at its videos API, which says itself what
 	// it can't make

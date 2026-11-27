@@ -34,6 +34,7 @@ import (
 
 	"github.com/yetone/magpie/internal/beat"
 	"github.com/yetone/magpie/internal/catalog"
+	"github.com/yetone/magpie/internal/cloud"
 )
 
 // MinRefreshEvery is the shortest RefreshEvery: a vendor's list changes
@@ -293,6 +294,9 @@ func refreshDueLists(ctx context.Context, now time.Time) []string {
 	// of an idle magpie (#3185)
 	f := load()
 	own, _ := ownOf(f)
+	if cloud.Enabled() {
+		own = All()
+	}
 	for _, p := range ordered(own, f.Order) {
 		every := p.RefreshInterval()
 		// a list saved before lists kept the models made for other APIs

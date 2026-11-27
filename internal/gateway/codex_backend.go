@@ -25,6 +25,7 @@ import (
 	"github.com/yetone/magpie/internal/access"
 	"github.com/yetone/magpie/internal/catalog"
 	"github.com/yetone/magpie/internal/claudeseal"
+	"github.com/yetone/magpie/internal/cloud"
 	"github.com/yetone/magpie/internal/codexcat"
 	"github.com/yetone/magpie/internal/codexsummary"
 	"github.com/yetone/magpie/internal/lazyre"
@@ -100,6 +101,10 @@ func (s *Server) codexBackend(w http.ResponseWriter, r *http.Request) {
 		// own models goes through magpie's accounts when its turns do
 		// (codexAccounts), else on as it came
 		model := modelOf(body)
+		if cloud.Enabled() && !strings.Contains(model, "/") {
+			writeError(w, provider.Responses, http.StatusForbidden, "native ChatGPT subscription accounts are not available in cloud mode; use a namespaced keyed-provider model")
+			return
+		}
 		if !strings.Contains(model, "/") {
 			id, ok := codexAccounts(r, model)
 			if !ok {
@@ -196,6 +201,10 @@ func (s *Server) codexBackend(w http.ResponseWriter, r *http.Request) {
 				writeError(w, provider.Responses, http.StatusForbidden, msg)
 				return
 			}
+		}
+		if cloud.Enabled() && !strings.Contains(model, "/") {
+			writeError(w, provider.Responses, http.StatusForbidden, "native ChatGPT subscription accounts are not available in cloud mode; use a namespaced keyed-provider model")
+			return
 		}
 		// The namespace owns the route even if a model is not in the catalog.
 		// Unknown providers/groups must fail locally, never fall through to OpenAI.

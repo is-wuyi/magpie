@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/yetone/magpie/internal/catalog"
+	"github.com/yetone/magpie/internal/cloud"
 	"github.com/yetone/magpie/internal/lazyre"
 	"github.com/yetone/magpie/internal/settings"
 )
@@ -197,6 +198,9 @@ const ContextSmallest = -1
 type Group struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	// Cloud groups have the same ownership boundary as their providers.
+	OwnerUserID    string `json:"ownerUserId,omitempty"`
+	HouseChannelID string `json:"houseChannelId,omitempty"`
 	// Note is the user's own word on the group (ConatusMoon2222 on X:
 	// which key it is for, why it is ordered so): one line, shown under
 	// its name on the Routing page and by magpie group, never sent to an
@@ -593,6 +597,13 @@ var groupsBuilt atomic.Int64
 func buildGroupsIn(entries []Entry) []Group {
 	groupsBuilt.Add(1)
 	f := heldOf("file", load)
+	if cloud.Enabled() {
+		gs, err := loadCloudGroups()
+		if err != nil {
+			return nil
+		}
+		f.Groups = gs
+	}
 	var out []Group
 	hidden := map[string]bool{}
 	var have map[string]bool // the providers magpie has, switched off or not
@@ -616,7 +627,7 @@ func buildGroupsIn(entries []Entry) []Group {
 		}
 		out = append(out, withMatches(entries, g.own()))
 	}
-	if !served(f.Groups) { // plugins/groups is off: the user's own aren't served
+	if !cloud.Enabled() && !served(f.Groups) { // plugins/groups is off: the user's own aren't served
 		out = slices.DeleteFunc(out, func(g Group) bool { return !g.Auto })
 	}
 	if !f.NoAutoGroups {

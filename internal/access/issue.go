@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/yetone/magpie/internal/cloud"
 	"github.com/yetone/magpie/internal/settings"
 )
 
@@ -243,6 +244,21 @@ func prune(keys []Key, now time.Time) ([]Key, int) {
 // Check is Authenticate with why a key it knows is turned away: a
 // *Refused for one expired or whose issuer no longer lets it in.
 func Check(secret string) (Identity, error) {
+	if cloud.Enabled() {
+		a := cloudAuth()
+		if a == nil || secret == "" {
+			return Identity{}, errCloudAuthUnavailable
+		}
+		who, err := a.Authenticate(secret)
+		if err != nil {
+			return Identity{}, err
+		}
+		if !who.Cloud || who.UserID == "" || who.KeyID == "" {
+			return Identity{}, errCloudAuthUnavailable
+		}
+		who.sum = sha256.Sum256([]byte(secret))
+		return who, nil
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	keys, err := load()
@@ -283,6 +299,10 @@ func Check(secret string) (Identity, error) {
 func Current(who Identity) bool {
 	if who.KeyID == "" {
 		return false
+	}
+	if cloud.Enabled() {
+		a := cloudAuth()
+		return a != nil && who.Cloud && a.Current(who, who.sum)
 	}
 	mu.Lock()
 	defer mu.Unlock()
@@ -353,7 +373,7 @@ func identityOf(k Key, keys []Key, now time.Time) (Identity, error) {
 		return Identity{}, &Refused{Why: fmt.Sprintf("the gateway key %q names an account group, and magpie can't read its account groups now: %v", k.Name, err)}
 	}
 	k.Accounts = accounts
-	who := Identity{KeyID: k.ID, KeyName: k.Name, Limit: k.Limit, More: k.More, Models: HeldModels(k.Models, k.Accounts), Aliases: k.Aliases, AccountModels: len(k.Models) == 0 && picksAccounts(k.Accounts), Accounts: k.Accounts, MCP: k.MCP, Quotas: k.Quotas, ReadOnly: k.ReadOnly, Browser: k.Browser, Admin: adminOf(k), Memory: memoryOf(k), Expires: k.Expires, Issues: k.Issues && k.Issuer == "" && !k.Browser, MaxConcurrency: k.MaxConcurrency, ServiceTier: k.ServiceTier, Redact: k.Redact, Routing: k.Routing}
+	who := Identity{KeyID: k.ID, KeyName: k.Name, Cloud: k.UserID != "", UserID: k.UserID, HouseChannels: slices.Clone(k.HouseChannels), Limit: k.Limit, More: k.More, Models: HeldModels(k.Models, k.Accounts), Aliases: k.Aliases, AccountModels: len(k.Models) == 0 && picksAccounts(k.Accounts), Accounts: k.Accounts, MCP: k.MCP, Quotas: k.Quotas, ReadOnly: k.ReadOnly, Browser: k.Browser, Admin: adminOf(k), Memory: memoryOf(k), Expires: k.Expires, Issues: k.Issues && k.Issuer == "" && !k.Browser, MaxConcurrency: k.MaxConcurrency, ServiceTier: k.ServiceTier, Redact: k.Redact, Routing: k.Routing}
 	// the default key as Default tells it: marked LAN, or the id the
 	// settings name (settings read only for an unmarked key)
 	who.Default = k.LAN || (k.ID != "" && settings.Shared().LANKeyID == k.ID)

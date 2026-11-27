@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/yetone/magpie/internal/access"
+	"github.com/yetone/magpie/internal/provider"
 )
 
 // A gateway key may give models names of its own (access.Key.Aliases,
@@ -28,20 +29,20 @@ const maxAliasBody = 32 << 20
 // aliasRequest is r with the model a key's name stands for in the model's
 // place: r as it is when the key gives no names, or r asks none of them.
 func aliasRequest(r *http.Request, who access.Identity) *http.Request {
-	if len(who.Aliases) == 0 {
+	if len(who.Aliases) == 0 && !who.Cloud {
 		return r
 	}
 	switch r.Method {
 	case http.MethodGet:
 		if id, ok := strings.CutPrefix(r.URL.Path, "/v1/models/"); ok {
-			if real, ok := who.AliasFor(id); ok {
+			if real, ok := cloudAliasFor(who, id); ok {
 				return withPath(r, "/v1/models/"+real)
 			}
 		}
 	case http.MethodPost, http.MethodPut, http.MethodPatch:
 		if call, ok := strings.CutPrefix(r.URL.Path, "/v1beta/models/"); ok {
 			if i := strings.LastIndex(call, ":"); i > 0 {
-				if real, ok := who.AliasFor(call[:i]); ok {
+				if real, ok := cloudAliasFor(who, call[:i]); ok {
 					return withPath(r, "/v1beta/models/"+real+call[i:])
 				}
 			}
@@ -50,6 +51,24 @@ func aliasRequest(r *http.Request, who access.Identity) *http.Request {
 		return aliasBody(r, who)
 	}
 	return r
+}
+
+// cloudAliasFor applies a key's explicit alias first, then resolves a bare
+// model against only the caller's visible providers. Without this scope the
+// global catalog could select another tenant's provider before the ACL ran.
+func cloudAliasFor(who access.Identity, id string) (string, bool) {
+	if real, ok := who.AliasFor(id); ok {
+		return real, true
+	}
+	if !who.Cloud || strings.Contains(id, "/") {
+		return "", false
+	}
+	for _, e := range provider.Catalog() {
+		if e.Provider != nil && e.Model == id && providerAllowed(who, *e.Provider) {
+			return e.ID, true
+		}
+	}
+	return "", false
 }
 
 func withPath(r *http.Request, path string) *http.Request {
@@ -83,7 +102,7 @@ func aliasBody(r *http.Request, who access.Identity) *http.Request {
 	if err != nil || len(buf) > maxAliasBody {
 		return r
 	}
-	real, ok := who.AliasFor(modelOf(buf))
+	real, ok := cloudAliasFor(who, modelOf(buf))
 	if !ok {
 		return r
 	}

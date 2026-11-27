@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yetone/magpie/internal/agent"
+	"github.com/yetone/magpie/internal/cloud"
 	"github.com/yetone/magpie/internal/daemon"
 	"github.com/yetone/magpie/internal/gateway"
 	"github.com/yetone/magpie/internal/gui"
@@ -137,6 +138,11 @@ func answers(addr string) bool {
 
 // printWeb prints where a started page is, and what its link carries.
 func printWeb(w *gui.Web) {
+	if cloud.Enabled() {
+		fmt.Println(green.Render("●"), "magpie cloud on", bold.Render(w.Link))
+		fmt.Println(muted.Render("  email sign-in · authenticated gateway " + advertisedURL()))
+		return
+	}
 	fmt.Println(green.Render("●"), "magpie web on", bold.Render(w.Link))
 	if w.BoxLink != "" {
 		fmt.Println(muted.Render("  the LazyCat box's administrators, signed in to the box, open"), w.BoxLink, muted.Render("without the key"))

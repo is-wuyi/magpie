@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yetone/magpie/internal/access"
+	"github.com/yetone/magpie/internal/cloud"
 	"github.com/yetone/magpie/internal/provider"
 )
 
@@ -47,5 +49,32 @@ func TestClosestByNameFirst(t *testing.T) {
 	got := provider.Closest("space bunny", 3)
 	if len(got) != 2 || got[0] != "a/m1" || got[1] != "b/space-bunny-old" {
 		t.Fatalf("Closest = %v", got)
+	}
+}
+
+func TestUnknownModelNamesOnlyCloudCallerProviders(t *testing.T) {
+	provider.RegisterCloudLoader(func() ([]provider.Provider, error) {
+		return []provider.Provider{
+			{ID: "u-user-a-openai", Name: "Own", Key: "k", Chat: "https://own.example/v1", Models: []string{"space-bunny-free"}, OwnerUserID: "user-a"},
+			{ID: "h-house-a-openai", Name: "Granted", Key: "k", Chat: "https://house-a.example/v1", Models: []string{"space-bunny-plus"}, HouseChannelID: "house-a"},
+			{ID: "h-house-b-openai", Name: "Other house", Key: "k", Chat: "https://house-b.example/v1", Models: []string{"space-bunny-other"}, HouseChannelID: "house-b"},
+			{ID: "u-user-b-openai", Name: "Other tenant", Key: "k", Chat: "https://user-b.example/v1", Models: []string{"space-bunny-other"}, OwnerUserID: "user-b"},
+		}, nil
+	})
+	cloud.SetEnabled(true)
+	t.Cleanup(func() {
+		cloud.SetEnabled(false)
+		provider.Changed()
+	})
+	provider.Changed()
+	who := access.Identity{Cloud: true, UserID: "user-a", HouseChannels: []string{"house-a"}}
+	msg := unknownModel(who, "space-buny", "")
+	if !strings.Contains(msg, "u-user-a-openai/space-bunny-free") || !strings.Contains(msg, "h-house-a-openai/space-bunny-plus") {
+		t.Fatalf("visible models missing: %s", msg)
+	}
+	for _, hidden := range []string{"h-house-b-openai", "u-user-b-openai"} {
+		if strings.Contains(msg, hidden) {
+			t.Fatalf("unauthorized provider %q leaked into the error: %s", hidden, msg)
+		}
 	}
 }

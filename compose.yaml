@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: magpie
+      POSTGRES_USER: magpie
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U magpie -d magpie"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # PostgreSQL is intentionally not published on the host or the Internet.
+
+  magpie:
+    build:
+      context: .
+      args:
+        VERSION: ${MAGPIE_VERSION:-dev}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["web", "--addr", "0.0.0.0:3430", "--no-open"]
+    environment:
+      MAGPIE_CLOUD: "1"
+      MAGPIE_ADDR: 0.0.0.0:3425
+      MAGPIE_DATABASE_URL: postgres://magpie:${POSTGRES_PASSWORD}@postgres:5432/magpie?sslmode=disable
+      MAGPIE_AUTH_SECRET: ${MAGPIE_AUTH_SECRET:?set MAGPIE_AUTH_SECRET in .env}
+      MAGPIE_CONFIG_KEY: ${MAGPIE_CONFIG_KEY:?set MAGPIE_CONFIG_KEY in .env}
+      MAGPIE_ADMIN_EMAILS: ${MAGPIE_ADMIN_EMAILS:?set MAGPIE_ADMIN_EMAILS in .env}
+      MAGPIE_PUBLIC_URL: ${MAGPIE_PUBLIC_URL:?set MAGPIE_PUBLIC_URL in .env}
+      MAGPIE_AUTH_TRUST_PROXY_HEADERS: ${MAGPIE_AUTH_TRUST_PROXY_HEADERS:-true}
+      MAGPIE_ALLOW_PRIVATE_UPSTREAMS: ${MAGPIE_ALLOW_PRIVATE_UPSTREAMS:-false}
+      MAGPIE_AUTH_TRUSTED_ORIGINS: ${MAGPIE_PUBLIC_URL}
+      MAGPIE_SMTP_HOST: ${MAGPIE_SMTP_HOST:?configure SMTP in .env}
+      MAGPIE_SMTP_PORT: ${MAGPIE_SMTP_PORT:-587}
+      MAGPIE_SMTP_USERNAME: ${MAGPIE_SMTP_USERNAME:-}
+      MAGPIE_SMTP_PASSWORD: ${MAGPIE_SMTP_PASSWORD:-}
+      MAGPIE_SMTP_FROM: ${MAGPIE_SMTP_FROM:?configure SMTP in .env}
+      MAGPIE_SMTP_FROM_NAME: ${MAGPIE_SMTP_FROM_NAME:-magpie}
+      MAGPIE_SMTP_TLS: ${MAGPIE_SMTP_TLS:-starttls}
+      MAGPIE_RECHARGE_PRESETS: ${MAGPIE_RECHARGE_PRESETS:-10,20,50,100,200,500}
+      ALIPAY_APP_ID: ${ALIPAY_APP_ID:-}
+      ALIPAY_PRIVATE_KEY: ${ALIPAY_PRIVATE_KEY:-}
+      ALIPAY_PUBLIC_KEY: ${ALIPAY_PUBLIC_KEY:-}
+      ALIPAY_SELLER_ID: ${ALIPAY_SELLER_ID:-}
+      ALIPAY_GATEWAY_URL: ${ALIPAY_GATEWAY_URL:-https://openapi.alipay.com/gateway.do}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_MCH_ID: ${WECHAT_MCH_ID:-}
+      WECHAT_MERCHANT_SERIAL: ${WECHAT_MERCHANT_SERIAL:-}
+      WECHAT_PRIVATE_KEY: ${WECHAT_PRIVATE_KEY:-}
+      WECHAT_API_V3_KEY: ${WECHAT_API_V3_KEY:-}
+      WECHAT_PLATFORM_CERTIFICATES: ${WECHAT_PLATFORM_CERTIFICATES:-}
+    volumes:
+      - magpie-config:/config
+    ports:
+      # This one port serves the portal and the authenticated gateway routes.
+      - "3430:3430"
+    # Port 3425 remains private to the container network.
+
+volumes:
+  postgres-data:
+  magpie-config:

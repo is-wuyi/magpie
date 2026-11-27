@@ -9,6 +9,11 @@ The gateway can send a request to three kinds of upstream:
 Package `internal/provider` holds all three, the routing groups built over
 them, and what is left of each one's allowance.
 
+In cloud mode only keyed providers are enabled, and PostgreSQL replaces the
+shared provider file. `OwnerUserID` and `HouseChannelID` identify the tenant
+boundary; see [Cloud service](cloud.md) for encrypted storage, grants and the
+request authorization path.
+
 Plugin ownership of the deprecated built-in subscriptions is in
 [Provider and plugin ownership](provider-plugins.md). How the gateway orders
 keys and accounts per request is in [Gateway routing and fallback](gateway-routing.md).

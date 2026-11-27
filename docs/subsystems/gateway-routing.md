@@ -11,6 +11,11 @@ This page covers how a request is routed. Plugins that change requests and
 replies are in [Gateway middleware](gateway-middleware.md). Subscriptions
 served by a plugin are in [Provider and plugin ownership](provider-plugins.md).
 
+Cloud mode additionally checks tenant ownership or a published house grant
+at both model listing and candidate selection, including fallback. House
+attempts use the wallet reservation lifecycle in [Cloud service](cloud.md);
+BYOK attempts do not charge the house wallet.
+
 WorkBuddy and CodeBuddy Code's `X-Conversation-ID` is a native session header
 in `sessionHeaders` (`sessionOf`, `nativeSessionOf`, `conversationID` in
 [`gateway.go`](../../internal/gateway/gateway.go)). It keeps their requests

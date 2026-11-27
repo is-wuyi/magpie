@@ -21,6 +21,7 @@ import (
 
 	"github.com/klauspost/compress/gzhttp"
 
+	"github.com/yetone/magpie/internal/cloud"
 	"github.com/yetone/magpie/internal/gateway"
 	"github.com/yetone/magpie/internal/plugin"
 	"github.com/yetone/magpie/internal/proc"
@@ -71,6 +72,8 @@ type Web struct {
 	key                 string
 	srv                 *http.Server
 	quit                chan struct{}
+	onClose             func()
+	closeOnce           sync.Once
 }
 
 // webReexec is set when the page's restart to update has put the new
@@ -89,6 +92,9 @@ const webRunKey = "MAGPIE_WEB_RUNKEY"
 // LazyCat box, MAGPIE_WEB_SIGN_IN=lazycat lets the box's administrators in
 // without it, signed in to the box (webBoxSignIn).
 func StartWeb(addr, version string) (*Web, error) {
+	if cloud.Enabled() {
+		return startCloudWeb(addr, version)
+	}
 	Version = version
 	key, fixed, err := webKey()
 	if err != nil {
@@ -195,6 +201,13 @@ func (w *Web) Close() {
 	// to replay the whole conversation instead of resuming its session.
 	stopServing()
 	<-pageDone
+	// Cloud storage stays available until every in-flight response has had
+	// its chance to settle usage and release its wallet reservation.
+	w.closeOnce.Do(func() {
+		if w.onClose != nil {
+			w.onClose()
+		}
+	})
 }
 
 // ServedGateway is the gateway this process serves, nil while another

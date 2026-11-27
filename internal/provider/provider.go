@@ -26,6 +26,7 @@ import (
 
 	"github.com/yetone/magpie/internal/appdir"
 	"github.com/yetone/magpie/internal/catalog"
+	"github.com/yetone/magpie/internal/cloud"
 	"github.com/yetone/magpie/internal/filememo"
 	"github.com/yetone/magpie/internal/lastgood"
 	"github.com/yetone/magpie/internal/lazyre"
@@ -51,6 +52,11 @@ var Protocols = []Protocol{Chat, Responses, Anthropic}
 type Provider struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	// OwnerUserID identifies a tenant-owned provider in cloud mode.
+	// HouseChannelID identifies an admin-owned provider granted through a
+	// published house channel. Exactly one is set for a cloud provider.
+	OwnerUserID    string `json:"ownerUserId,omitempty"`
+	HouseChannelID string `json:"houseChannelId,omitempty"`
 	// Was are ids the provider had before it was renamed (see Rename):
 	// a model still picked by one of them reaches it.
 	Was []string `json:"was,omitempty"`
@@ -1080,6 +1086,15 @@ var AllBuiltAt atomic.Int64
 func allProviders() []Provider {
 	AllBuilt.Add(1)
 	AllBuiltAt.Store(time.Now().UnixNano())
+	if cloud.Enabled() {
+		// A failed database read is unknown, never the local owner's file or
+		// an empty configuration that a later write could replace.
+		ps, err := loadCloudProviders()
+		if err != nil {
+			return nil
+		}
+		return ps
+	}
 	f := load()
 	out, picks := ownOf(f)
 	for _, a := range Accounts() {

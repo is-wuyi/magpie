@@ -129,12 +129,16 @@ func upstreamKey(secret string) bool {
 }
 
 type Key struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Off    bool   `json:"off,omitempty"`
-	LAN    bool   `json:"lan,omitempty"` // default key and durable migration marker
-	Secret string `json:"secret,omitempty"`
-	Masked string `json:"masked,omitempty"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// UserID owns a cloud key. HouseChannels are the published channels
+	// this key may use; user-owned providers are authorized by UserID.
+	UserID        string   `json:"userId,omitempty"`
+	HouseChannels []string `json:"houseChannels,omitempty"`
+	Off           bool     `json:"off,omitempty"`
+	LAN           bool     `json:"lan,omitempty"` // default key and durable migration marker
+	Secret        string   `json:"secret,omitempty"`
+	Masked        string   `json:"masked,omitempty"`
 	// Limit is the key's own budget (#585); nil for none.
 	Limit *Limit `json:"limit,omitempty"`
 	// More are its limits after the first (#2227), each a window of its
@@ -300,9 +304,14 @@ const MaxKeyConcurrency = 1000
 // models and the accounts it may use.
 type Identity struct {
 	KeyID, KeyName string
-	Limit          *Limit
-	More           []Limit
-	Models         []string
+	// Cloud marks a database-authenticated cloud identity. UserID scopes
+	// every provider, usage row and administrative action to its owner.
+	Cloud         bool
+	UserID        string
+	HouseChannels []string
+	Limit         *Limit
+	More          []Limit
+	Models        []string
 	// Aliases are Key.Aliases; an issued key has none.
 	Aliases map[string]string
 	// AccountModels says Models are only HeldModels' "<provider>/*" of

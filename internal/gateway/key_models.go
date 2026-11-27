@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/yetone/magpie/internal/access"
+	"github.com/yetone/magpie/internal/cloud"
 	"github.com/yetone/magpie/internal/provider"
 )
 
@@ -234,6 +235,9 @@ func allows(who access.Identity, ids ...string) bool {
 // one written before the id was given, or an agent's old ref to the
 // provider's own id.
 func modelAllowed(who access.Identity, p provider.Provider, model string) bool {
+	if !providerAllowed(who, p) {
+		return false
+	}
 	if _, spent := spentFor(who, p, model); spent {
 		return false // a limit of the key's that counts it is spent
 	}
@@ -278,8 +282,17 @@ func groupNamed(who access.Identity, g provider.Group) bool {
 // A member a spent limit counts doesn't take the group away from the key:
 // the request goes on to the others (groupKeeps).
 func groupAllowed(who access.Identity, g provider.Group, ms []provider.Member) bool {
+	if !groupCloudAllowed(who, g) {
+		return false
+	}
+	if !membersCloudAllowed(who, ms) {
+		return false
+	}
 	if groupBarred(who, g) {
 		return false
+	}
+	if cloud.Enabled() && g.Auto {
+		return membersCloudAllowed(who, ms)
 	}
 	who.Spent = nil
 	return groupNamed(who, g) || (foundGroup(g) || who.AccountModels) && membersAllowed(who, ms)

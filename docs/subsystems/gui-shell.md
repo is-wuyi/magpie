@@ -7,6 +7,11 @@ with no binding generator and no bundler. `magpie web` serves the same page
 to a browser for a machine with no desktop. Package `internal/gui` hosts all
 three.
 
+With `MAGPIE_CLOUD=1`, `startCloudWeb` instead serves the multi-user portal
+in [`cloud.go`](../../internal/gui/cloud.go): email sessions, tenant-scoped
+APIs, wallet and payment callbacks. The legacy owner-key middleware and local
+management handler are not mounted. See [Cloud service](cloud.md).
+
 ## Responsibilities and sources of truth
 
 | Part | Responsibility | Source |

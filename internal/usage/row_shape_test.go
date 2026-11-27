@@ -57,6 +57,29 @@ func TestRowsOfOneSessionShareAShape(t *testing.T) {
 	}
 }
 
+// Cloud calls carry a different reservation id without turning every call
+// into a new shared shape or growing the packed row's 152-byte budget.
+func TestCloudRowsShareAShape(t *testing.T) {
+	c := &rowChunk{}
+	for i := range 20 {
+		c.add(Row{Record: Record{Time: time.Unix(int64(i), 0), Archive: fmt.Sprint("archive", i), CloudUserID: "user", HouseChannelID: "house", BillingReservationID: fmt.Sprint("reservation", i)}}, "", int64(i), false)
+	}
+	if len(c.Shapes) != 1 {
+		t.Fatalf("20 cloud calls kept %d shapes, want 1", len(c.Shapes))
+	}
+	for _, chunk := range []*rowChunk{c, c.pack().unpack()} {
+		for i := range chunk.Rows {
+			r := chunk.row(i)
+			if r.Archive != fmt.Sprint("archive", i) || r.BillingReservationID != fmt.Sprint("reservation", i) || r.CloudUserID != "user" || r.HouseChannelID != "house" {
+				t.Fatalf("row %d lost its cloud fields: %+v", i, r.Record)
+			}
+		}
+	}
+	if n := unsafe.Sizeof(packedRow{}); n != 152 {
+		t.Fatalf("a packed row is %d bytes, want 152", n)
+	}
+}
+
 // A row keeps its times in ms in 32 bits: one longer than that, which no
 // call takes, reads back as the longest it can keep, not wrapped around.
 func TestRowTimesPastWhatARowKeeps(t *testing.T) {

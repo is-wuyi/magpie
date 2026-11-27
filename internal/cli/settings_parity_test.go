@@ -244,321 +244,355 @@ var cliForRoute = map[string]string{
 }
 
 var notYet = map[string]string{
-	"POST /api/agent-fast":                       A,  // agent_models.go
-	"POST /api/agent-models/{id}":                A,  // agent_models.go
-	"GET /api/agents/cli":                        A,  // api.go
-	"GET /api/agents/install":                    A,  // api.go
-	"GET /api/agents/preview/{id}":               A,  // api.go
-	"GET /api/cli":                               A,  // api.go
-	"GET /api/drift":                             A,  // api.go
-	"GET /api/notices":                           W,  // api.go
-	"GET /api/feedback":                          W,  // feedback.go: Settings › About's Report a problem, which opens a page
-	"GET /api/omarchy":                           W,  // api.go
-	"GET /api/appearance/css":                    W,  // appearance.go: the stylesheet of the accent and the picture behind the pages; the accent is `magpie settings set accent`
-	"GET /api/appearance/wallpaper":              W,  // appearance.go
-	"POST /api/appearance/wallpaper":             W,  // appearance.go: the picture comes from the window's file picker
-	"GET /api/quit":                              W,  // api.go: the window's Quit question
-	"POST /api/quit/disconnect":                  W,  // api.go: the Quit question's Disconnect and quit, which quits the app
-	"POST /api/restart":                          W,  // restart.go: the app starting itself again, as the tray's Restart magpie does
-	"POST /api/page-away":                        W,  // api.go: the page says it went from view, so its caches can go
-	"GET /api/remote":                            W,  // remote.go: another magpie opened in a window of the app
-	"POST /api/remote":                           W,  // remote.go
-	"POST /api/remote/forget":                    W,  // remote.go
-	"GET /api/state":                             W,  // api.go
-	"POST /api/agents/{action}/{id}":             A,  // api.go
-	"POST /api/agents/arrange":                   W,  // api.go
-	"POST /api/agents/here":                      A,  // api.go
-	"POST /api/agents/cli/{id}":                  A,  // api.go
-	"POST /api/agents/disconnect-offline/{id}":   A,  // api.go
-	"POST /api/agents/rescan":                    A,  // api.go
-	"POST /api/agents/restart/{id}":              A,  // api.go
-	"POST /api/agents/stage/{id}":                A,  // api.go
-	"POST /api/agents/telemetry/{id}":            A,  // api.go
-	"POST /api/cli":                              A,  // api.go
-	"POST /api/cli-behind/quiet":                 W,  // api.go
-	"POST /api/gateway/held/reveal":              W,  // api.go
-	"POST /api/profile/{action}":                 A,  // api.go
-	"POST /api/proxy/check":                      S2, // api.go
-	"POST /api/egress/check":                     P,  // proxycheck.go: the Providers list's Check again, where the Claude accounts' way out is
-	"POST /api/pipelines/check":                  S2, // pipecheck.go: Settings › Models' Quick check, one real call a pipeline
-	"POST /api/relay-check":                      S2, // pipecheck.go: the Usage speed card by provider, its check button: a few small real calls to one model on one provider
-	"POST /api/proxies/save":                     S2, // proxies.go: Settings › Network's saved proxies
-	"POST /api/proxies/delete":                   S2, // proxies.go
-	"POST /api/proxies/test":                     S2, // proxies.go
-	"POST /api/set":                              S2, // api.go
-	"POST /api/settings/agent-telemetry":         A,  // api.go
-	"POST /api/settings/bark":                    S2, // api.go: Bark server, key and daily time
-	"POST /api/bark/test":                        S2, // api.go: a test push to Bark
-	"POST /api/settings/allowips":                S2, // api.go
-	"POST /api/settings/bare-ids":                S2, // api.go
-	"POST /api/settings/busy-load":               S2, // api.go
-	"POST /api/settings/checkin-account":         S2, // api.go
-	"POST /api/settings/claude-cache":            S2, // tune.go
-	"POST /api/settings/claude-attribution":      S2, // tune.go
-	"POST /api/settings/codex-agents-v1":         S2, // api.go
-	"POST /api/settings/codex-async-compact":     S2, // api.go
-	"POST /api/settings/codex-service-tier":      S2, // api.go
-	"POST /api/settings/codex-auto-reset":        S2, // api.go
-	"POST /api/settings/codex-auto-review":       S2, // api.go
-	"POST /api/settings/codex-client":            S2, // api.go
-	"POST /api/settings/codex-compact-held/drop": S2, // api.go
-	"POST /api/settings/codex-credits":           S2, // api.go
-	"POST /api/settings/codex-descriptions":      S2, // api.go
-	"POST /api/settings/codex-open":              S2, // api.go
-	"POST /api/settings/codex-predictions":       S2, // api.go
-	"POST /api/settings/codex-reset-lead":        S2, // api.go
-	"POST /api/settings/codex-suggestions":       S2, // api.go
-	"POST /api/settings/codex-titles":            S2, // api.go
-	"POST /api/settings/codex-warm-at":           S2, // api.go
-	"POST /api/settings/cors":                    S2, // api.go
-	"POST /api/settings/desktop-isolated":        A,  // api.go; `magpie claude-desktop launcher`, an agent's form this check can't read
-	"POST /api/settings/desktop-isolated-claude": A,  // api.go; `magpie claude-desktop launcher claude-dir`, an agent's form this check can't read
-	"POST /api/settings/desktop-longest":         S2, // api.go
-	"POST /api/settings/disabled-models":         S2, // api.go
-	"POST /api/settings/full-context":            S2, // api.go
-	"POST /api/settings/github-token":            S2, // api.go
-	"POST /api/settings/guide":                   W,  // api.go
-	"POST /api/settings/join":                    S2, // join.go: the join password, set or turned off
-	"POST /api/settings/lan":                     S2, // api.go
-	"POST /api/settings/log/reveal":              W,  // api.go
-	"POST /api/settings/login":                   S2, // api.go
-	"POST /api/settings/minimax-checkin":         S2, // api.go
-	"POST /api/settings/panel-shortcut":          W,  // api.go
-	"POST /api/settings/plain-names":             S2, // api.go
-	"POST /api/settings/plugin-checkin":          S2, // api.go
-	"POST /api/settings/plugin-option":           S2, // api.go
-	"POST /api/settings/port":                    S2, // api.go
-	"POST /api/settings/qoder-checkin":           S2, // api.go
-	"POST /api/settings/quota-left":              S2, // api.go
-	"POST /api/settings/quota-reads":             S2, // api.go
-	"POST /api/settings/redact-actions":          S2, // api.go
-	"POST /api/settings/redact-allow":            S2, // api.go
-	"POST /api/settings/redact-route":            S2, // api.go
-	"POST /api/settings/redact-rule":             S2, // api.go
-	"POST /api/settings/redact-rules":            S2, // api.go
-	"POST /api/settings/reveal":                  W,  // api.go
-	"POST /api/settings/search-all":              S2, // api.go
-	"POST /api/settings/search-keys":             S2, // api.go
-	"POST /api/settings/search-quota":            S2, // api.go
-	"POST /api/settings/text-size":               W,  // api.go
-	"POST /api/settings/trae-checkin":            S2, // api.go
-	"POST /api/settings/update-skip":             S2, // api.go
-	"POST /api/settings/workbuddy-checkin":       S2, // api.go
-	"POST /api/usage/arrange":                    W,  // api.go
-	"POST /api/warm-all":                         A,  // api.go: All accounts warms every account in use (5bd41301b)
-	"POST /api/warm-now":                         A,  // api.go
-	"POST /api/window/{action}":                  W,  // api.go
-	"GET /api/autobackup":                        S2, // backup.go: Back up by itself
-	"POST /api/autobackup/{action}":              S2, // backup.go
-	"GET /api/archive":                           S2, // archive.go
-	"GET /api/archive/file":                      S2, // archive.go
-	"POST /api/archive/export":                   S2, // archive.go
-	"POST /api/settings/archive":                 S2, // archive.go
-	"GET /api/web-page":                          W,  // apppage.go
-	"POST /api/web-page":                         W,  // apppage.go
-	"GET /api/plugins/builtin":                   P,  // builtins.go
-	"POST /api/plugins/builtin":                  P,  // builtins.go
-	"GET /api/plugins/counts":                    P,  // plugins_counts.go: Discover's installs and likes
-	"GET /api/catalog/models":                    P,  // catalog_models.go: the model editor's Same as picker
-	"POST /api/plugins/like":                     P,  // plugins_counts.go
-	"GET /api/library/browser":                   L,  // browser.go
-	"POST /api/library/browser/setup":            L,  // browser.go
-	"POST /api/library/browser/drag":             L,  // browser.go
-	"POST /api/library/browser/extension":        L,  // browser.go
-	"GET /api/caller-keys/models":                P,  // caller_keys.go
-	"GET /api/caller-keys/mcp":                   L,  // caller_keys.go: the servers `magpie gateway-key mcp` takes
-	"POST /api/config/repair":                    A,  // config_repair.go
-	"GET /api/context":                           U,  // context.go
-	"GET /api/context/text":                      W,  // context.go
-	"GET /api/context/reply":                     W,  // context_archive.go: the reply half of the same detail view
-	"GET /api/context/session":                   W,  // context.go: a session's context, request by request, in its detail view
-	"GET /api/dev/wait":                          W,  // dev_on.go
-	"POST /api/dev/import":                       W,  // dev_on.go
-	"GET /api/fonts":                             W,  // fonts.go
-	"POST /api/settings/gateway-mode":            S2, // gatewaymode.go
-	"POST /api/gateway/pause":                    A,  // gatewaypause.go
-	"POST /api/gateway/restart":                  A,  // gateway_takeover.go
-	"POST /api/gateway/take-over":                A,  // gateway_takeover.go
-	"GET /api/importapps":                        P,  // importapps.go
-	"GET /api/importapps/discovery":              P,  // importapps.go
-	"POST /api/importapps":                       P,  // importapps.go
-	"POST /api/import/icon":                      W,  // importlink.go
-	"POST /api/local-hosts":                      S2, // localhosts.go
-	"GET /api/masking/record":                    U,  // masking.go
-	"GET /api/masking/records":                   U,  // masking.go
-	"GET /api/masking/sent":                      U,  // masking.go
-	"GET /api/masking/summary":                   U,  // masking.go
-	"GET /api/masking/value":                     U,  // masking.go
-	"POST /api/masking/allow":                    S2, // masking.go
-	"POST /api/masking/clear":                    U,  // masking.go
-	"POST /api/masking/preview":                  U,  // masking.go
-	"POST /api/masking/values":                   U,  // masking.go
-	"GET /api/library/bili":                      L,  // library.go
-	"GET /api/library/bili/settings":             L,  // library.go
-	"GET /api/library/icon":                      W,  // library.go
-	"GET /api/library/market/servers":            L,  // library.go
-	"GET /api/library/market/skills":             L,  // library.go
-	"GET /api/library/market/pi":                 L,  // library.go
-	"GET /api/library/market/claude":             L,  // library.go
-	"GET /api/library/mcp-signin/{id}":           L,  // library.go
-	"GET /api/library/pi":                        L,  // library.go
-	"GET /api/library/rtk":                       L,  // library.go
-	"GET /api/library/skill":                     L,  // library.go
-	"POST /api/library/bili":                     L,  // library.go
-	"POST /api/library/bili/install":             L,  // library.go
-	"POST /api/library/bili/settings":            L,  // library.go
-	"POST /api/library/market/about":             L,  // library.go
-	"POST /api/library/mcp-account":              L,  // library.go
-	"POST /api/library/mcp-signin":               L,  // library.go
-	"POST /api/library/mcp-signin/{id}/cancel":   L,  // library.go
-	"POST /api/library/mcp-signout":              L,  // library.go
-	"POST /api/library/mcp/check":                L,  // library.go
-	"POST /api/library/mcp/config":               L,  // library.go
-	"POST /api/library/pi":                       L,  // library.go
-	"POST /api/library/pi/copy":                  L,  // library.go
-	"POST /api/library/pi/install":               L,  // library.go
-	"POST /api/library/pi/remove":                L,  // library.go
-	"POST /api/library/projects/choose":          W,  // library.go
-	"POST /api/library/reveal":                   W,  // library.go
-	"POST /api/library/rtk":                      L,  // library.go
-	"POST /api/library/rtk/install":              L,  // library.go
-	"POST /api/library/rtk/path":                 L,  // library.go
-	"POST /api/library/rtk/upgrade":              L,  // library.go
-	"POST /api/library/skills/check":             L,  // library.go
-	"POST /api/library/skills/probe":             L,  // library.go
-	"POST /api/library/plugins/probe":            L,  // library.go
-	"POST /api/library/subagents/probe":          L,  // library.go
-	"POST /api/library/commands/probe":           L,  // library.go
-	"GET /api/memory":                            L,  // memory.go
-	"POST /api/memory":                           L,  // memory.go
-	"POST /api/memory/digest":                    L,  // memory.go
-	"POST /api/memory/remove":                    L,  // memory.go
-	"POST /api/memory/status":                    L,  // memory.go
-	"GET /api/memory/distill":                    L,  // memory_distill.go
-	"POST /api/memory/distill":                   L,  // memory_distill.go
-	"POST /api/memory/distill/run":               L,  // memory_distill.go
-	"POST /api/memory/distill/stop":              L,  // memory_distill.go
-	"POST /api/memory/promote":                   L,  // memory.go
-	"POST /api/memory/skill":                     L,  // memory.go
-	"POST /api/memory/decline":                   L,  // memory.go
-	"POST /api/memory/dream":                     L,  // memory_distill.go
-	"POST /api/memory/dream/run":                 L,  // memory_distill.go
-	"POST /api/memory/dream/undo":                L,  // memory_distill.go
-	"GET /api/memory/semantic":                   L,  // memory_semantic.go
-	"POST /api/memory/semantic":                  L,  // memory_semantic.go
-	"POST /api/memory/rank":                      L,  // memory_semantic.go
-	"POST /api/library/skills/regroup":           W,  // library.go
-	"GET /api/omarchy/widget":                    W,  // omarchy.go
-	"POST /api/omarchy/widget":                   W,  // omarchy.go
-	"GET /api/plugin-pages":                      W,  // pluginpage.go
-	"GET /api/plugin-panels":                     W,  // pluginpage.go
-	"POST /api/plugin-pages/image":               W,  // pageimage.go
-	"POST /api/plugin-pages/arrange":             W,  // pluginpage.go: the sidebar's order of plugin pages, dragged
-	"POST /api/plugin-pages/options":             W,  // pluginpage.go
-	"POST /api/plugin-pages/read":                W,  // pluginpage.go
-	"GET /api/plugins/agents":                    P,  // plugins.go
-	"GET /api/plugins/git":                       P,  // plugins.go
-	"GET /api/plugins/github":                    P,  // plugins.go
-	"GET /api/plugins/listings":                  P,  // plugins.go
-	"GET /api/plugins/market":                    P,  // plugins.go
-	"GET /api/plugins/npm":                       P,  // plugins.go
-	"GET /api/plugins/page":                      P,  // plugins.go
-	"GET /api/plugins/search":                    P,  // plugins.go
-	"GET /api/plugins/updates":                   P,  // plugins.go
-	"POST /api/plugin-signin":                    P,  // plugins.go
-	"POST /api/plugin-signin/prompt":             P,  // plugins.go
-	"POST /api/plugins/check":                    P,  // plugins.go
-	"POST /api/plugins/choose":                   W,  // plugins.go
-	"POST /api/plugins/mirror":                   P,  // plugins.go
-	"POST /api/plugins/registry":                 P,  // plugins.go
-	"GET /api/privacy-model":                     S2, // privacymodel.go
-	"POST /api/privacy-model":                    S2, // privacymodel.go
-	"GET /api/claude/mode":                       P,  // providers.go
-	"GET /api/gateway/call":                      P,  // providers.go
-	"GET /api/icons/{name}":                      W,  // providers.go
-	"GET /api/lanes":                             P,  // providers.go
-	"GET /api/signin/{id}":                       P,  // providers.go
-	"GET /api/upstream":                          P,  // providers.go
-	"POST /api/codex/app/reopen":                 W,  // providers.go
-	"POST /api/codex/daemon/{action}":            P,  // providers.go
-	"POST /api/copy":                             W,  // providers.go
-	"POST /api/icons":                            W,  // providers.go
-	"POST /api/icons/favicon":                    W,  // providers.go
-	"POST /api/icons/url":                        W,  // providers.go
-	"POST /api/keys/{action}":                    P,  // providers.go
-	"POST /api/login/{action}":                   P,  // providers.go
-	"POST /api/open":                             W,  // providers.go
-	"POST /api/page":                             W,  // providers.go
-	"POST /api/partner":                          P,  // providers.go
-	"POST /api/providers/arrange":                W,  // providers.go
-	"POST /api/signin":                           P,  // providers.go
-	"POST /api/signin/{id}/callback":             P,  // providers.go
-	"POST /api/signin/{id}/cancel":               P,  // providers.go
-	"POST /api/signin/claude-token":              P,  // providers.go
-	"POST /api/signin/import":                    P,  // providers.go
-	"POST /api/signin/export":                    P,  // providers.go
-	"POST /api/stepfun/{id}/session":             P,  // providers.go
-	"POST /api/stepfun/{id}/signout":             P,  // providers.go
-	"GET /api/qianwen/{id}/signin":               P,  // providers.go
-	"POST /api/qianwen/{id}/signin":              P,  // providers.go
-	"POST /api/qianwen/{id}/signin/cancel":       P,  // providers.go
-	"POST /api/qianwen/{id}/signout":             P,  // providers.go
-	"POST /api/qianfan/{id}/session":             P,  // providers.go
-	"POST /api/qianfan/{id}/signout":             P,  // providers.go
-	"GET /api/speeds":                            U,  // sessions_manage.go: the Sessions row's speed curve
-	"GET /api/sessions/manage":                   U,  // sessions_manage.go
-	"GET /api/sessions/search":                   U,  // sessions_manage.go
-	"POST /api/sessions/codex-provider":          U,  // sessions_manage.go
-	"POST /api/sessions/delete":                  U,  // sessions_manage.go
-	"POST /api/sessions/purge":                   U,  // sessions_manage.go
-	"POST /api/sessions/recording":               U,  // sessions_manage.go
-	"POST /api/sessions/relocate-claude":         U,  // sessions_manage.go
-	"POST /api/sessions/restore":                 U,  // sessions_manage.go
-	"GET /api/sessions/markdown":                 U,  // sessions.go
-	"GET /api/sessions/one":                      U,  // sessions.go
-	"GET /api/sessions/overview":                 U,  // sessions.go
-	"GET /api/sessions/progress":                 U,  // sessions.go
-	"GET /api/sessions/stats":                    U,  // sessions.go
-	"POST /api/agents/open":                      W,  // sessions.go
-	"POST /api/agents/reveal":                    W,  // sessions.go
-	"POST /api/sessions/carry":                   U,  // sessions.go
-	"POST /api/sessions/export":                  U,  // sessions.go
-	"POST /api/sessions/terminal":                W,  // sessions.go
-	"GET /api/model-loads":                       U,  // speeds.go
-	"GET /api/model-speeds":                      U,  // speeds.go
-	"GET /api/gateway/held/{name}":               U,  // trace.go
-	"GET /api/gateway/history":                   U,  // trace.go
-	"GET /api/gateway/route":                     U,  // trace.go
-	"GET /api/gateway/trace":                     U,  // trace.go
-	"POST /api/gateway/session-titles":           U,  // trace.go
-	"POST /api/gateway/unrest":                   U,  // trace.go
-	"GET /api/tune":                              U,  // tune.go
-	"POST /api/tune/apply":                       U,  // tune.go
-	"POST /api/tune/takeover":                    U,  // tune.go
-	"POST /api/tune/undo":                        U,  // tune.go
-	"POST /api/uninstall/finish":                 A,  // uninstall.go
-	"GET /api/usage/checkins/off":                U,  // usage.go: the Usage page's switched-off check-ins; `magpie accounts checkin` does every account
-	"GET /api/usage/deleted/into":                U,  // usage.go
-	"GET /api/usage/heatmap":                     U,  // usage.go
-	"GET /api/usage/quotas/history/holds":        U,  // usage.go
-	"GET /api/usage/requests":                    U,  // usage.go
-	"GET /api/usage/requests/content":            U,  // usage.go
-	"GET /api/usage/traffic":                     U,  // usage.go: the live rate
-	"POST /api/usage/checkin-account":            U,  // usage.go: one account now; `magpie accounts checkin` does every account
-	"POST /api/usage/clear":                      U,  // usage.go
-	"POST /api/usage/codex-reset":                U,  // usage.go
-	"POST /api/usage/deleted":                    U,  // usage.go
-	"POST /api/usage/minimax-checkin":            U,  // usage.go
-	"POST /api/usage/plugin-checkin":             U,  // usage.go
-	"POST /api/usage/qoder-checkin":              U,  // usage.go
-	"POST /api/usage/quotas/refresh":             U,  // usage.go
-	"POST /api/usage/requests/export":            U,  // usage.go
-	"POST /api/usage/trae-checkin":               U,  // usage.go
-	"GET /api/update/notes":                      W,  // update.go
-	"POST /api/update/using":                     W,  // update.go
-	"GET /api/whatsnew":                          W,  // whatsnew.go
-	"POST /api/whatsnew/seen":                    W,  // whatsnew.go
-	"POST /api/whatsnew/today":                   W,  // whatsnew.go
+	"POST /api/agent-fast":                                A, // agent_models.go
+	"POST /api/agent-models/{id}":                         A, // agent_models.go
+	"GET /api/agents/cli":                                 A, // api.go
+	"GET /api/agents/install":                             A, // api.go
+	"GET /api/agents/preview/{id}":                        A, // api.go
+	"GET /api/cli":                                        A, // api.go
+	"GET /api/drift":                                      A, // api.go
+	"GET /api/notices":                                    W, // api.go
+	"GET /api/feedback":                                   W, // feedback.go: Settings › About's Report a problem, which opens a page
+	"GET /api/omarchy":                                    W, // api.go
+	"GET /api/appearance/css":                             W, // appearance.go: the stylesheet of the accent and the picture behind the pages; the accent is `magpie settings set accent`
+	"GET /api/appearance/wallpaper":                       W, // appearance.go
+	"POST /api/appearance/wallpaper":                      W, // appearance.go: the picture comes from the window's file picker
+	"GET /api/quit":                                       W, // api.go: the window's Quit question
+	"POST /api/quit/disconnect":                           W, // api.go: the Quit question's Disconnect and quit, which quits the app
+	"POST /api/restart":                                   W, // restart.go: the app starting itself again, as the tray's Restart magpie does
+	"POST /api/page-away":                                 W, // api.go: the page says it went from view, so its caches can go
+	"GET /api/cloud/health":                               W, // cloud.go: container and browser health check
+	"GET /api/cloud/providers":                            W, // cloud.go: the signed-in user's providers
+	"POST /api/cloud/providers":                           W, // cloud.go
+	"DELETE /api/cloud/providers/{id}":                    W, // cloud.go
+	"GET /api/cloud/house-channels":                       W, // cloud.go
+	"POST /api/cloud/house-channels/{id}/grant":           W, // cloud.go
+	"DELETE /api/cloud/house-channels/{id}/grant":         W, // cloud.go
+	"GET /api/cloud/keys":                                 W, // cloud.go
+	"POST /api/cloud/keys":                                W, // cloud.go
+	"DELETE /api/cloud/keys/{id}":                         W, // cloud.go
+	"GET /api/cloud/admin/house-channels":                 W, // cloud.go: administrator-only cloud API
+	"POST /api/cloud/admin/house-channels":                W, // cloud.go
+	"POST /api/cloud/admin/house-channels/{id}/providers": W, // cloud.go
+	"GET /api/cloud/admin/house-channels/{id}/providers":  W, // cloud.go
+	"DELETE /api/cloud/admin/house-channels/{id}/providers/{providerID}": W, // cloud.go
+	"POST /api/cloud/admin/house-channels/{id}/status":                   W, // cloud.go
+	"GET /api/cloud/groups":                           W,  // cloud_groups_http.go
+	"POST /api/cloud/groups":                          W,  // cloud_groups_http.go
+	"DELETE /api/cloud/groups/{id}":                   W,  // cloud_groups_http.go
+	"GET /api/cloud/admin/users":                      W,  // cloud_admin_http.go
+	"POST /api/cloud/admin/users/{id}/status":         W,  // cloud_admin_http.go
+	"POST /api/cloud/admin/wallet/credit":             W,  // cloud_admin_http.go
+	"GET /api/cloud/admin/orders":                     W,  // cloud_admin_http.go
+	"GET /api/cloud/admin/audit":                      W,  // cloud_admin_http.go
+	"GET /api/cloud/usage":                            W,  // cloud_payment_http.go
+	"GET /api/cloud/wallet":                           W,  // cloud_payment_http.go
+	"POST /api/cloud/orders":                          W,  // cloud_payment_http.go
+	"GET /api/cloud/orders":                           W,  // cloud_payment_http.go
+	"GET /api/cloud/orders/{merchantNo}":              W,  // cloud_payment_http.go
+	"GET /api/cloud/house-channels/{id}/prices":       W,  // cloud_payment_http.go
+	"GET /api/cloud/admin/house-channels/{id}/prices": W,  // cloud_payment_http.go
+	"PUT /api/cloud/admin/house-channels/{id}/prices": W,  // cloud_payment_http.go
+	"POST /api/payments/alipay/notify":                W,  // cloud_payment_http.go: provider-signed public callback
+	"POST /api/payments/wechat/notify":                W,  // cloud_payment_http.go
+	"GET /api/remote":                                 W,  // remote.go: another magpie opened in a window of the app
+	"POST /api/remote":                                W,  // remote.go
+	"POST /api/remote/forget":                         W,  // remote.go
+	"GET /api/state":                                  W,  // api.go
+	"POST /api/agents/{action}/{id}":                  A,  // api.go
+	"POST /api/agents/arrange":                        W,  // api.go
+	"POST /api/agents/here":                           A,  // api.go
+	"POST /api/agents/cli/{id}":                       A,  // api.go
+	"POST /api/agents/disconnect-offline/{id}":        A,  // api.go
+	"POST /api/agents/rescan":                         A,  // api.go
+	"POST /api/agents/restart/{id}":                   A,  // api.go
+	"POST /api/agents/stage/{id}":                     A,  // api.go
+	"POST /api/agents/telemetry/{id}":                 A,  // api.go
+	"POST /api/cli":                                   A,  // api.go
+	"POST /api/cli-behind/quiet":                      W,  // api.go
+	"POST /api/gateway/held/reveal":                   W,  // api.go
+	"POST /api/profile/{action}":                      A,  // api.go
+	"POST /api/proxy/check":                           S2, // api.go
+	"POST /api/egress/check":                          P,  // proxycheck.go: the Providers list's Check again, where the Claude accounts' way out is
+	"POST /api/pipelines/check":                       S2, // pipecheck.go: Settings › Models' Quick check, one real call a pipeline
+	"POST /api/relay-check":                           S2, // pipecheck.go: the Usage speed card by provider, its check button: a few small real calls to one model on one provider
+	"POST /api/proxies/save":                          S2, // proxies.go: Settings › Network's saved proxies
+	"POST /api/proxies/delete":                        S2, // proxies.go
+	"POST /api/proxies/test":                          S2, // proxies.go
+	"POST /api/set":                                   S2, // api.go
+	"POST /api/settings/agent-telemetry":              A,  // api.go
+	"POST /api/settings/bark":                         S2, // api.go: Bark server, key and daily time
+	"POST /api/bark/test":                             S2, // api.go: a test push to Bark
+	"POST /api/settings/allowips":                     S2, // api.go
+	"POST /api/settings/bare-ids":                     S2, // api.go
+	"POST /api/settings/busy-load":                    S2, // api.go
+	"POST /api/settings/checkin-account":              S2, // api.go
+	"POST /api/settings/claude-cache":                 S2, // tune.go
+	"POST /api/settings/claude-attribution":           S2, // tune.go
+	"POST /api/settings/codex-agents-v1":              S2, // api.go
+	"POST /api/settings/codex-async-compact":          S2, // api.go
+	"POST /api/settings/codex-service-tier":           S2, // api.go
+	"POST /api/settings/codex-auto-reset":             S2, // api.go
+	"POST /api/settings/codex-auto-review":            S2, // api.go
+	"POST /api/settings/codex-client":                 S2, // api.go
+	"POST /api/settings/codex-compact-held/drop":      S2, // api.go
+	"POST /api/settings/codex-credits":                S2, // api.go
+	"POST /api/settings/codex-descriptions":           S2, // api.go
+	"POST /api/settings/codex-open":                   S2, // api.go
+	"POST /api/settings/codex-predictions":            S2, // api.go
+	"POST /api/settings/codex-reset-lead":             S2, // api.go
+	"POST /api/settings/codex-suggestions":            S2, // api.go
+	"POST /api/settings/codex-titles":                 S2, // api.go
+	"POST /api/settings/codex-warm-at":                S2, // api.go
+	"POST /api/settings/cors":                         S2, // api.go
+	"POST /api/settings/desktop-isolated":             A,  // api.go; `magpie claude-desktop launcher`, an agent's form this check can't read
+	"POST /api/settings/desktop-isolated-claude":      A,  // api.go; `magpie claude-desktop launcher claude-dir`, an agent's form this check can't read
+	"POST /api/settings/desktop-longest":              S2, // api.go
+	"POST /api/settings/disabled-models":              S2, // api.go
+	"POST /api/settings/full-context":                 S2, // api.go
+	"POST /api/settings/github-token":                 S2, // api.go
+	"POST /api/settings/guide":                        W,  // api.go
+	"POST /api/settings/join":                         S2, // join.go: the join password, set or turned off
+	"POST /api/settings/lan":                          S2, // api.go
+	"POST /api/settings/log/reveal":                   W,  // api.go
+	"POST /api/settings/login":                        S2, // api.go
+	"POST /api/settings/minimax-checkin":              S2, // api.go
+	"POST /api/settings/panel-shortcut":               W,  // api.go
+	"POST /api/settings/plain-names":                  S2, // api.go
+	"POST /api/settings/plugin-checkin":               S2, // api.go
+	"POST /api/settings/plugin-option":                S2, // api.go
+	"POST /api/settings/port":                         S2, // api.go
+	"POST /api/settings/qoder-checkin":                S2, // api.go
+	"POST /api/settings/quota-left":                   S2, // api.go
+	"POST /api/settings/quota-reads":                  S2, // api.go
+	"POST /api/settings/redact-actions":               S2, // api.go
+	"POST /api/settings/redact-allow":                 S2, // api.go
+	"POST /api/settings/redact-route":                 S2, // api.go
+	"POST /api/settings/redact-rule":                  S2, // api.go
+	"POST /api/settings/redact-rules":                 S2, // api.go
+	"POST /api/settings/reveal":                       W,  // api.go
+	"POST /api/settings/search-all":                   S2, // api.go
+	"POST /api/settings/search-keys":                  S2, // api.go
+	"POST /api/settings/search-quota":                 S2, // api.go
+	"POST /api/settings/text-size":                    W,  // api.go
+	"POST /api/settings/trae-checkin":                 S2, // api.go
+	"POST /api/settings/update-skip":                  S2, // api.go
+	"POST /api/settings/workbuddy-checkin":            S2, // api.go
+	"POST /api/usage/arrange":                         W,  // api.go
+	"POST /api/warm-all":                              A,  // api.go: All accounts warms every account in use (5bd41301b)
+	"POST /api/warm-now":                              A,  // api.go
+	"POST /api/window/{action}":                       W,  // api.go
+	"GET /api/autobackup":                             S2, // backup.go: Back up by itself
+	"POST /api/autobackup/{action}":                   S2, // backup.go
+	"GET /api/archive":                                S2, // archive.go
+	"GET /api/archive/file":                           S2, // archive.go
+	"POST /api/archive/export":                        S2, // archive.go
+	"POST /api/settings/archive":                      S2, // archive.go
+	"GET /api/web-page":                               W,  // apppage.go
+	"POST /api/web-page":                              W,  // apppage.go
+	"GET /api/plugins/builtin":                        P,  // builtins.go
+	"POST /api/plugins/builtin":                       P,  // builtins.go
+	"GET /api/plugins/counts":                         P,  // plugins_counts.go: Discover's installs and likes
+	"GET /api/catalog/models":                         P,  // catalog_models.go: the model editor's Same as picker
+	"POST /api/plugins/like":                          P,  // plugins_counts.go
+	"GET /api/library/browser":                        L,  // browser.go
+	"POST /api/library/browser/setup":                 L,  // browser.go
+	"POST /api/library/browser/drag":                  L,  // browser.go
+	"POST /api/library/browser/extension":             L,  // browser.go
+	"GET /api/caller-keys/models":                     P,  // caller_keys.go
+	"GET /api/caller-keys/mcp":                        L,  // caller_keys.go: the servers `magpie gateway-key mcp` takes
+	"POST /api/config/repair":                         A,  // config_repair.go
+	"GET /api/context":                                U,  // context.go
+	"GET /api/context/text":                           W,  // context.go
+	"GET /api/context/reply":                          W,  // context_archive.go: the reply half of the same detail view
+	"GET /api/context/session":                        W,  // context.go: a session's context, request by request, in its detail view
+	"GET /api/dev/wait":                               W,  // dev_on.go
+	"POST /api/dev/import":                            W,  // dev_on.go
+	"GET /api/fonts":                                  W,  // fonts.go
+	"POST /api/settings/gateway-mode":                 S2, // gatewaymode.go
+	"POST /api/gateway/pause":                         A,  // gatewaypause.go
+	"POST /api/gateway/restart":                       A,  // gateway_takeover.go
+	"POST /api/gateway/take-over":                     A,  // gateway_takeover.go
+	"GET /api/importapps":                             P,  // importapps.go
+	"GET /api/importapps/discovery":                   P,  // importapps.go
+	"POST /api/importapps":                            P,  // importapps.go
+	"POST /api/import/icon":                           W,  // importlink.go
+	"POST /api/local-hosts":                           S2, // localhosts.go
+	"GET /api/masking/record":                         U,  // masking.go
+	"GET /api/masking/records":                        U,  // masking.go
+	"GET /api/masking/sent":                           U,  // masking.go
+	"GET /api/masking/summary":                        U,  // masking.go
+	"GET /api/masking/value":                          U,  // masking.go
+	"POST /api/masking/allow":                         S2, // masking.go
+	"POST /api/masking/clear":                         U,  // masking.go
+	"POST /api/masking/preview":                       U,  // masking.go
+	"POST /api/masking/values":                        U,  // masking.go
+	"GET /api/library/bili":                           L,  // library.go
+	"GET /api/library/bili/settings":                  L,  // library.go
+	"GET /api/library/icon":                           W,  // library.go
+	"GET /api/library/market/servers":                 L,  // library.go
+	"GET /api/library/market/skills":                  L,  // library.go
+	"GET /api/library/market/pi":                      L,  // library.go
+	"GET /api/library/market/claude":                  L,  // library.go
+	"GET /api/library/mcp-signin/{id}":                L,  // library.go
+	"GET /api/library/pi":                             L,  // library.go
+	"GET /api/library/rtk":                            L,  // library.go
+	"GET /api/library/skill":                          L,  // library.go
+	"POST /api/library/bili":                          L,  // library.go
+	"POST /api/library/bili/install":                  L,  // library.go
+	"POST /api/library/bili/settings":                 L,  // library.go
+	"POST /api/library/market/about":                  L,  // library.go
+	"POST /api/library/mcp-account":                   L,  // library.go
+	"POST /api/library/mcp-signin":                    L,  // library.go
+	"POST /api/library/mcp-signin/{id}/cancel":        L,  // library.go
+	"POST /api/library/mcp-signout":                   L,  // library.go
+	"POST /api/library/mcp/check":                     L,  // library.go
+	"POST /api/library/mcp/config":                    L,  // library.go
+	"POST /api/library/pi":                            L,  // library.go
+	"POST /api/library/pi/copy":                       L,  // library.go
+	"POST /api/library/pi/install":                    L,  // library.go
+	"POST /api/library/pi/remove":                     L,  // library.go
+	"POST /api/library/projects/choose":               W,  // library.go
+	"POST /api/library/reveal":                        W,  // library.go
+	"POST /api/library/rtk":                           L,  // library.go
+	"POST /api/library/rtk/install":                   L,  // library.go
+	"POST /api/library/rtk/path":                      L,  // library.go
+	"POST /api/library/rtk/upgrade":                   L,  // library.go
+	"POST /api/library/skills/check":                  L,  // library.go
+	"POST /api/library/skills/probe":                  L,  // library.go
+	"POST /api/library/plugins/probe":                 L,  // library.go
+	"POST /api/library/subagents/probe":               L,  // library.go
+	"POST /api/library/commands/probe":                L,  // library.go
+	"GET /api/memory":                                 L,  // memory.go
+	"POST /api/memory":                                L,  // memory.go
+	"POST /api/memory/digest":                         L,  // memory.go
+	"POST /api/memory/remove":                         L,  // memory.go
+	"POST /api/memory/status":                         L,  // memory.go
+	"GET /api/memory/distill":                         L,  // memory_distill.go
+	"POST /api/memory/distill":                        L,  // memory_distill.go
+	"POST /api/memory/distill/run":                    L,  // memory_distill.go
+	"POST /api/memory/distill/stop":                   L,  // memory_distill.go
+	"POST /api/memory/promote":                        L,  // memory.go
+	"POST /api/memory/skill":                          L,  // memory.go
+	"POST /api/memory/decline":                        L,  // memory.go
+	"POST /api/memory/dream":                          L,  // memory_distill.go
+	"POST /api/memory/dream/run":                      L,  // memory_distill.go
+	"POST /api/memory/dream/undo":                     L,  // memory_distill.go
+	"GET /api/memory/semantic":                        L,  // memory_semantic.go
+	"POST /api/memory/semantic":                       L,  // memory_semantic.go
+	"POST /api/memory/rank":                           L,  // memory_semantic.go
+	"POST /api/library/skills/regroup":                W,  // library.go
+	"GET /api/omarchy/widget":                         W,  // omarchy.go
+	"POST /api/omarchy/widget":                        W,  // omarchy.go
+	"GET /api/plugin-pages":                           W,  // pluginpage.go
+	"GET /api/plugin-panels":                          W,  // pluginpage.go
+	"POST /api/plugin-pages/image":                    W,  // pageimage.go
+	"POST /api/plugin-pages/arrange":                  W,  // pluginpage.go: the sidebar's order of plugin pages, dragged
+	"POST /api/plugin-pages/options":                  W,  // pluginpage.go
+	"POST /api/plugin-pages/read":                     W,  // pluginpage.go
+	"GET /api/plugins/agents":                         P,  // plugins.go
+	"GET /api/plugins/git":                            P,  // plugins.go
+	"GET /api/plugins/github":                         P,  // plugins.go
+	"GET /api/plugins/listings":                       P,  // plugins.go
+	"GET /api/plugins/market":                         P,  // plugins.go
+	"GET /api/plugins/npm":                            P,  // plugins.go
+	"GET /api/plugins/page":                           P,  // plugins.go
+	"GET /api/plugins/search":                         P,  // plugins.go
+	"GET /api/plugins/updates":                        P,  // plugins.go
+	"POST /api/plugin-signin":                         P,  // plugins.go
+	"POST /api/plugin-signin/prompt":                  P,  // plugins.go
+	"POST /api/plugins/check":                         P,  // plugins.go
+	"POST /api/plugins/choose":                        W,  // plugins.go
+	"POST /api/plugins/mirror":                        P,  // plugins.go
+	"POST /api/plugins/registry":                      P,  // plugins.go
+	"GET /api/privacy-model":                          S2, // privacymodel.go
+	"POST /api/privacy-model":                         S2, // privacymodel.go
+	"GET /api/claude/mode":                            P,  // providers.go
+	"GET /api/gateway/call":                           P,  // providers.go
+	"GET /api/icons/{name}":                           W,  // providers.go
+	"GET /api/lanes":                                  P,  // providers.go
+	"GET /api/signin/{id}":                            P,  // providers.go
+	"GET /api/upstream":                               P,  // providers.go
+	"POST /api/codex/app/reopen":                      W,  // providers.go
+	"POST /api/codex/daemon/{action}":                 P,  // providers.go
+	"POST /api/copy":                                  W,  // providers.go
+	"POST /api/icons":                                 W,  // providers.go
+	"POST /api/icons/favicon":                         W,  // providers.go
+	"POST /api/icons/url":                             W,  // providers.go
+	"POST /api/keys/{action}":                         P,  // providers.go
+	"POST /api/login/{action}":                        P,  // providers.go
+	"POST /api/open":                                  W,  // providers.go
+	"POST /api/page":                                  W,  // providers.go
+	"POST /api/partner":                               P,  // providers.go
+	"POST /api/providers/arrange":                     W,  // providers.go
+	"POST /api/signin":                                P,  // providers.go
+	"POST /api/signin/{id}/callback":                  P,  // providers.go
+	"POST /api/signin/{id}/cancel":                    P,  // providers.go
+	"POST /api/signin/claude-token":                   P,  // providers.go
+	"POST /api/signin/import":                         P,  // providers.go
+	"POST /api/signin/export":                         P,  // providers.go
+	"POST /api/stepfun/{id}/session":                  P,  // providers.go
+	"POST /api/stepfun/{id}/signout":                  P,  // providers.go
+	"GET /api/qianwen/{id}/signin":                    P,  // providers.go
+	"POST /api/qianwen/{id}/signin":                   P,  // providers.go
+	"POST /api/qianwen/{id}/signin/cancel":            P,  // providers.go
+	"POST /api/qianwen/{id}/signout":                  P,  // providers.go
+	"POST /api/qianfan/{id}/session":                  P,  // providers.go
+	"POST /api/qianfan/{id}/signout":                  P,  // providers.go
+	"GET /api/speeds":                                 U,  // sessions_manage.go: the Sessions row's speed curve
+	"GET /api/sessions/manage":                        U,  // sessions_manage.go
+	"GET /api/sessions/search":                        U,  // sessions_manage.go
+	"POST /api/sessions/codex-provider":               U,  // sessions_manage.go
+	"POST /api/sessions/delete":                       U,  // sessions_manage.go
+	"POST /api/sessions/purge":                        U,  // sessions_manage.go
+	"POST /api/sessions/recording":                    U,  // sessions_manage.go
+	"POST /api/sessions/relocate-claude":              U,  // sessions_manage.go
+	"POST /api/sessions/restore":                      U,  // sessions_manage.go
+	"GET /api/sessions/markdown":                      U,  // sessions.go
+	"GET /api/sessions/one":                           U,  // sessions.go
+	"GET /api/sessions/overview":                      U,  // sessions.go
+	"GET /api/sessions/progress":                      U,  // sessions.go
+	"GET /api/sessions/stats":                         U,  // sessions.go
+	"POST /api/agents/open":                           W,  // sessions.go
+	"POST /api/agents/reveal":                         W,  // sessions.go
+	"POST /api/sessions/carry":                        U,  // sessions.go
+	"POST /api/sessions/export":                       U,  // sessions.go
+	"POST /api/sessions/terminal":                     W,  // sessions.go
+	"GET /api/model-loads":                            U,  // speeds.go
+	"GET /api/model-speeds":                           U,  // speeds.go
+	"GET /api/gateway/held/{name}":                    U,  // trace.go
+	"GET /api/gateway/history":                        U,  // trace.go
+	"GET /api/gateway/route":                          U,  // trace.go
+	"GET /api/gateway/trace":                          U,  // trace.go
+	"POST /api/gateway/session-titles":                U,  // trace.go
+	"POST /api/gateway/unrest":                        U,  // trace.go
+	"GET /api/tune":                                   U,  // tune.go
+	"POST /api/tune/apply":                            U,  // tune.go
+	"POST /api/tune/takeover":                         U,  // tune.go
+	"POST /api/tune/undo":                             U,  // tune.go
+	"POST /api/uninstall/finish":                      A,  // uninstall.go
+	"GET /api/usage/checkins/off":                     U,  // usage.go: the Usage page's switched-off check-ins; `magpie accounts checkin` does every account
+	"GET /api/usage/deleted/into":                     U,  // usage.go
+	"GET /api/usage/heatmap":                          U,  // usage.go
+	"GET /api/usage/quotas/history/holds":             U,  // usage.go
+	"GET /api/usage/requests":                         U,  // usage.go
+	"GET /api/usage/requests/content":                 U,  // usage.go
+	"GET /api/usage/traffic":                          U,  // usage.go: the live rate
+	"POST /api/usage/checkin-account":                 U,  // usage.go: one account now; `magpie accounts checkin` does every account
+	"POST /api/usage/clear":                           U,  // usage.go
+	"POST /api/usage/codex-reset":                     U,  // usage.go
+	"POST /api/usage/deleted":                         U,  // usage.go
+	"POST /api/usage/minimax-checkin":                 U,  // usage.go
+	"POST /api/usage/plugin-checkin":                  U,  // usage.go
+	"POST /api/usage/qoder-checkin":                   U,  // usage.go
+	"POST /api/usage/quotas/refresh":                  U,  // usage.go
+	"POST /api/usage/requests/export":                 U,  // usage.go
+	"POST /api/usage/trae-checkin":                    U,  // usage.go
+	"GET /api/update/notes":                           W,  // update.go
+	"POST /api/update/using":                          W,  // update.go
+	"GET /api/whatsnew":                               W,  // whatsnew.go
+	"POST /api/whatsnew/seen":                         W,  // whatsnew.go
+	"POST /api/whatsnew/today":                        W,  // whatsnew.go
 }
 
 // guiRoutes are the /api routes internal/gui serves, as "METHOD /path".

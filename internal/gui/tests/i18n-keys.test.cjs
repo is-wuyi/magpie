@@ -25,7 +25,7 @@ test("no language has a key twice", () => {
 });
 
 test("a plugin's words are said in every language", () => {
-  for (const { file, dict } of strings().files.slice(1)) {
+  for (const { file, dict } of strings().files.filter((f) => !f.cloud).slice(1)) {
     assert.deepEqual(Object.keys(dict).sort(), ["de", "ja", "zh", "zh-TW"], file);
     const zh = Object.keys(dict.zh);
     assert.ok(zh.length, `${file} says nothing`);
@@ -71,7 +71,7 @@ test("a plugin's words are its own", () => {
     return false;
   };
   const shared = [];
-  for (const { file, dict } of strings().files.slice(1)) {
+  for (const { file, dict } of strings().files.filter((f) => !f.cloud).slice(1)) {
     const own = path.join(assets, path.dirname(file)) + path.sep;
     const rest = texts.filter(([p]) => !p.startsWith(own));
     for (const k of Object.keys(dict.zh)) {

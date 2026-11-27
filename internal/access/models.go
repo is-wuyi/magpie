@@ -77,8 +77,11 @@ func HeldModels(models, accounts []string) []string {
 	return out
 }
 
-// Restricted says the key may use only the models or accounts it lists.
-func (who Identity) Restricted() bool { return len(who.Models) > 0 || len(who.Accounts) > 0 }
+// Restricted says the caller needs model-list filtering. Cloud identities
+// are always restricted to their own providers and granted house channels.
+func (who Identity) Restricted() bool {
+	return who.Cloud || len(who.Models) > 0 || len(who.Accounts) > 0
+}
 
 // Allows says one of ids is among the key's models; any, for a key that
 // lists none. An Identity's models are already HeldModels: a key that

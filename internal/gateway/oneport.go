@@ -16,7 +16,7 @@ func (s *Server) Front() http.Handler {
 	// the goroutine dump ahead of lanGuard too, whose allow list reads
 	// settings.json under its lock (dumpFirst)
 	// (socketEntry: a socket's turns go through all of it again)
-	s.frontOnce.Do(func() { s.front = socketEntry(s.dumpFirst(lanGuard(s.Handler()))) })
+	s.frontOnce.Do(func() { s.front = socketEntry(s.dumpFirst(lanGuard(cloudRouteGuard(s.Handler())))) })
 	return s.front
 }
 

@@ -300,19 +300,21 @@ type rowChunk struct {
 // rowMsg is the Text of a row's Claude message id, after rowText's, and
 // rowError its error's
 const (
-	rowMsg   = 37
-	rowError = 9
+	rowMsg         = 40
+	rowError       = 9
+	rowArchive     = 22
+	rowReservation = 39
 	// rowClient is the Text of the client's own name, when the user counts
 	// it as another agent (Row.Client, #1958)
 	rowClient = 33
 	// rowTexts is how many strings a row has: rowText's and the message id
-	rowTexts = 38
+	rowTexts = 41
 )
 
 // rowVaried are the strings that differ call by call: the error, the
-// request and response ids, the archive and the message id. A row keeps
-// them itself; every other string is the same for most of a chunk's rows.
-var rowVaried = [...]int{rowError, 11, 22, 25, rowMsg}
+// request and response ids, the archive and the message id. A row keeps them
+// itself; every other string is the same for most of a chunk's rows.
+var rowVaried = [...]int{rowError, 11, rowArchive, 25, rowMsg}
 
 // rowVariedAt is each Text slot's place in Varied, or -1
 var rowVariedAt = func() (at [rowTexts]int8) {
@@ -372,9 +374,37 @@ func (c *rowChunk) shape(t [rowTexts]uint32) uint32 {
 // reason ("Upstream stop reason", #1927) and the service tiers (#1784)
 // among them: a string left out comes back empty from the cache, in the
 // page and in /v1/magpie/usage/requests (TestRowTextHoldsEveryString)
-func rowText(r *Row) [37]*string {
-	return [37]*string{&r.Agent, &r.Provider, &r.Host, &r.SessionProvider, &r.SessionAccount, &r.Model, &r.Requested, &r.Served, &r.Effort, &r.Error, &r.ErrType, &r.RequestID, &r.Endpoint, &r.Session, &r.NativeSession, &r.Kind, &r.Source, &r.Via, &r.ProviderKeyID, &r.ProviderKeyName, &r.CallerKeyID, &r.CallerKeyName, &r.Archive, &r.Operation, &r.ProviderAccount, &r.ResponseID, &r.Upstream, &r.Subagent, &r.ParentAgent, &r.Stop, &r.TierAsked, &r.TierSent, &r.TierServed, &r.Client, &r.CallerIssuerID, &r.ClientIP, &r.Wire}
+func rowText(r *Row) [40]*string {
+	return [40]*string{&r.Agent, &r.Provider, &r.Host, &r.SessionProvider, &r.SessionAccount, &r.Model, &r.Requested, &r.Served, &r.Effort, &r.Error, &r.ErrType, &r.RequestID, &r.Endpoint, &r.Session, &r.NativeSession, &r.Kind, &r.Source, &r.Via, &r.ProviderKeyID, &r.ProviderKeyName, &r.CallerKeyID, &r.CallerKeyName, &r.Archive, &r.Operation, &r.ProviderAccount, &r.ResponseID, &r.Upstream, &r.Subagent, &r.ParentAgent, &r.Stop, &r.TierAsked, &r.TierSent, &r.TierServed, &r.Client, &r.CallerIssuerID, &r.ClientIP, &r.Wire, &r.CloudUserID, &r.HouseChannelID, &r.BillingReservationID}
 }
+
+// packCloudArchive shares the archive's varied string id with the wallet
+// reservation id. Both differ by call, so putting the reservation in Shapes
+// would make a shape a call, while another Varied slot would make packedRow
+// 160 bytes. Archive's "<date>/<id>" form never starts with the marker.
+func packCloudArchive(archive, reservation string) string {
+	if reservation == "" {
+		return archive
+	}
+	out := []byte{0}
+	out = binary.AppendUvarint(out, uint64(len(reservation)))
+	out = append(out, reservation...)
+	return string(append(out, archive...))
+}
+
+func unpackCloudArchive(s string) (archive, reservation string) {
+	if s == "" || s[0] != 0 {
+		return s, ""
+	}
+	n, k := binary.Uvarint([]byte(s[1:]))
+	start := 1 + k
+	if k <= 0 || n > uint64(len(s)-start) {
+		return s, ""
+	}
+	end := start + int(n)
+	return s[end:], s[start:end]
+}
+
 func (c *rowChunk) add(r Row, msg string, order int64, failed bool) {
 	if c.dict == nil {
 		c.dict = map[string]uint32{"": 0}
@@ -394,8 +424,12 @@ func (c *rowChunk) add(r Row, msg string, order int64, failed bool) {
 	p.setTime(r.Time)
 	var t [rowTexts]uint32
 	for i, s := range rowText(&r) {
+		if i == rowArchive || i == rowReservation {
+			continue
+		}
 		t[i] = intern(*s)
 	}
+	t[rowArchive] = intern(packCloudArchive(r.Archive, r.BillingReservationID))
 	t[rowMsg] = intern(msg)
 	c.setTexts(&p, t)
 	if r.Priced {
@@ -504,6 +538,7 @@ func (c *rowChunk) row(i int) Row {
 	for i, s := range rowText(&r) {
 		*s = c.Strings[t[i]]
 	}
+	r.Archive, r.BillingReservationID = unpackCloudArchive(r.Archive)
 	if r.Swapped && p.Flags&swapKnown == 0 && (SameSpelled(r.Model, r.Served) || ServingName(r.Model, r.Served) || RelayRenamed(r.Model, r.Served) || VendorAlias(r.Model, r.Served)) {
 		r.Swapped = false // kept before a name spelled otherwise, a vendor's serving name, a relay's rename or the vendor's own alias was the same
 	} else if r.Swapped && (RegionTail(r.Model, r.Served) || ListedAs(r.Provider, r.Model, r.Served)) {

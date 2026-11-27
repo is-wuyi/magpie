@@ -238,6 +238,11 @@ func (s *Server) serveDecideTries(w http.ResponseWriter, r *http.Request, body [
 				}
 			})
 		}
+		if err := reserveCloudAttempt(r, c.p, c.model, withModel(body, c.model)); err != nil {
+			call.Status, call.Error = http.StatusPaymentRequired, "house-channel billing refused the request: "+err.Error()
+			writeError(w, provider.Chat, http.StatusPaymentRequired, call.Error)
+			return
+		}
 		d, err := s.postDecideSent(r.Context(), c.p, c.model, withModel(body, c.model))
 		status, b, header := d.status, d.answer, d.header
 		call.Provider = c.p.ID

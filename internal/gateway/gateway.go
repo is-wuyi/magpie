@@ -30,6 +30,8 @@ import (
 	"github.com/yetone/magpie/internal/access"
 	"github.com/yetone/magpie/internal/awake"
 	"github.com/yetone/magpie/internal/catalog"
+	"github.com/yetone/magpie/internal/cloud"
+	"github.com/yetone/magpie/internal/cloud/pricing"
 	"github.com/yetone/magpie/internal/codexrelay"
 	"github.com/yetone/magpie/internal/egress"
 	"github.com/yetone/magpie/internal/filememo"
@@ -948,6 +950,13 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	// once another magpie on this config folder lets go of it (serving.go:
 	// a Kubernetes rolling update's old pod, draining)
 	releaseServing := holdServing(ctx, servingLockPath(), func() {
+		if cloud.Enabled() {
+			// Cloud providers need their database-backed model lists refreshed,
+			// but no local account discovery, subscription migration, MCP,
+			// plugin installation or desktop maintenance runs in this process.
+			go provider.KeepListsFresh(ctx)
+			return
+		}
 		// the magpie serving the gateway, and only it, keeps the saved accounts
 		// signed in, so two never refresh one sign-in at once
 		go provider.KeepLoginsAlive(ctx)
@@ -1096,7 +1105,7 @@ func (s *Server) Handler() http.Handler {
 	// on (dumpFirst)
 	// a socket's turns go through all of it again (socketEntry); the
 	// agent's Retry-After is bounded on the way out (retryCapped)
-	return socketEntry(s.dumpFirst(retryCapped(s.counted(headerLogged(holdCatalog(corsGuard(callerGuard(readOnlyGuard(mux, withCaller(keptBodyRequests(keyLimited(s.keySlots(mux, mux)))))))))))))
+	return cloudRequestGuard(socketEntry(s.dumpFirst(retryCapped(s.counted(headerLogged(holdCatalog(corsGuard(callerGuard(readOnlyGuard(mux, withCaller(keptBodyRequests(keyLimited(s.keySlots(mux, mux))))))))))))))
 }
 
 // routes are the client APIs, each by its pattern: readOnlyGuard reads
@@ -3025,7 +3034,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 			turnedAway()
 			return
 		}
-		msg := unknownModel(call.Model, "")
+		msg := unknownModel(access.Caller(r.Context()), call.Model, "")
 		if g, ok := provider.DisabledGroup(asked); ok {
 			call.Error = "group switched off"
 			msg = fmt.Sprintf("the routing group %s is switched off in Magpie, so %q is not served; switch it on again on Magpie's Routing page to use it", g.Name, call.Model)
@@ -3468,7 +3477,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 		}
 	}
 	var accountHeld bool // every candidate was an account or key the calling key may not use
-	if keyHeld || accHeld {
+	if keyHeld || accHeld || cloud.Enabled() {
 		who := keyWho
 		var members map[string]bool
 		if chose {
@@ -6138,6 +6147,14 @@ func sinceStart(before, d time.Duration) int64 {
 // attempt sends a request to one provider. call.To stays empty when the
 // provider has no endpoint to send it to.
 func (s *Server) attempt(w http.ResponseWriter, r *http.Request, from provider.Protocol, p provider.Provider, model string, body []byte, call *Call) (int, string) {
+	if err := reserveCloudAttempt(r, p, model, body); err != nil {
+		status := http.StatusPaymentRequired
+		if errors.Is(err, errCloudBillingUnavailable) || errors.Is(err, pricing.ErrUnknownPrice) {
+			status = http.StatusServiceUnavailable
+		}
+		msg := "house-channel billing refused the request: " + err.Error()
+		return writeError(w, from, status, msg), msg
+	}
 	// the try that answers is the one whose rate estimates the reply's
 	// tokens (live.go), after a fallback another than the first
 	liveOfInflight(inflightOf(r.Context())).routed(p.ID, unprefixed(model))
