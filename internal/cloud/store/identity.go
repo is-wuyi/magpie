@@ -318,6 +318,9 @@ RETURNING `+emailCodeColumns,
 func checkSendThrottle(ctx context.Context, tx pgx.Tx, p IssueEmailCodeParams, ip netip.Addr) error {
 	var retry time.Duration
 	consider := func(d time.Duration) {
+		if d <= 0 {
+			return
+		}
 		if d < time.Second {
 			d = time.Second
 		}
