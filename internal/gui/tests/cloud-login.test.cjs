@@ -1,130 +1,102 @@
-// magpie cloud's sign-in page (internal/gui/assets/cloud), run the way the
+// magpie cloud's sign-in family (internal/gui/assets/cloud), run the way the
 // other GUI tests run: the real files, every API answered by a fixture in
 // this file, Chromium and WebKit, and every language the app ships. It
-// checks the email → one-time code → session path, sign-out, the language
-// menu, and that no server message or upstream credential reaches the page.
+// checks password sign-in, the email-code path, registration, password
+// reset, the public policy that chooses which of them exist, sign-out, and
+// that no server message or password reaches a page.
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { test } = require("node:test");
 const { chromium, webkit } = require("playwright");
-const { settled } = require("./reader.cjs");
 
 const ASSETS = path.resolve(__dirname, "../assets/cloud");
 const BASE = "http://magpie.test";
 const LOCALE = { en: "en-US", zh: "zh-CN", "zh-TW": "zh-TW", ja: "ja-JP", de: "de-DE" };
 const USER = { id: "user-ann", email: "ann@example.test", role: "user", emailVerified: true, createdAt: "2026-11-01T00:00:00Z" };
+const POLICY = { registrationEnabled: true, passwordLoginEnabled: true, codeLoginEnabled: true, passwordMinLength: 12 };
+const PASSWORD = "correct-horse-battery";
 
-// A few visible strings per language: the page's own heading, the two
-// buttons of the auth flow, its two answers, and the portal's section heads.
-// A missing or stale translation makes one of these fail, not only a lookup
-// of the dictionary.
 const EXPECT = {
   en: {
     langName: "English",
-    title: "Sign in to magpie cloud",
-    sendCode: "Send code",
-    signIn: "Sign in",
-    codeSent: "If that address can sign in, a code is on its way.",
-    invalidCode: "That code is not valid or has expired.",
-    member: "Member",
-    signOut: "Sign out",
-    providers: "Your providers",
-    houses: "House channels",
-    keys: "API keys",
-    admin: "Administration",
-    addProvider: "Add provider",
-    newKey: "Create key",
-    wallet: "Wallet",
-    emptyProviders: "No providers yet",
-    emptyHouses: "No house channels yet",
-    emptyKeys: "No API keys yet"
+    login: "Sign in",
+    intro: "Use your password, or ask for a one-time code by email.",
+    passwordMode: "Password",
+    codeMode: "Email code",
+    forgot: "Forgot your password?",
+    noAccount: "New to magpie cloud?",
+    create: "Create account",
+    register: "Create your account",
+    reset: "Reset your password",
+    closed: "Registration is closed",
+    codeSent: "If that address can sign in, a code is on its way."
   },
   zh: {
     langName: "简体中文",
-    title: "登录 magpie 云",
-    sendCode: "发送验证码",
-    signIn: "登录",
-    codeSent: "如果该邮箱可以登录，验证码正在发送中。",
-    invalidCode: "这个验证码无效或已过期。",
-    member: "成员",
-    signOut: "退出登录",
-    providers: "我的供应商",
-    houses: "公共频道",
-    keys: "API 密钥",
-    admin: "管理",
-    addProvider: "添加供应商",
-    newKey: "创建密钥",
-    wallet: "钱包",
-    emptyProviders: "还没有供应商",
-    emptyHouses: "还没有公共频道",
-    emptyKeys: "还没有 API 密钥"
+    login: "登录",
+    intro: "使用密码登录，或获取发往邮箱的一次性验证码。",
+    passwordMode: "密码",
+    codeMode: "邮箱验证码",
+    forgot: "忘记密码？",
+    noAccount: "还没有账户？",
+    create: "创建账户",
+    register: "创建账户",
+    reset: "重置密码",
+    closed: "注册已关闭",
+    codeSent: "如果该邮箱可以登录，验证码正在发送中。"
   },
   "zh-TW": {
     langName: "繁體中文",
-    title: "登入 magpie 雲端",
-    sendCode: "傳送驗證碼",
-    signIn: "登入",
-    codeSent: "如果這個地址可以登入，驗證碼正在傳送中。",
-    invalidCode: "這個驗證碼無效或已過期。",
-    member: "成員",
-    signOut: "登出",
-    providers: "我的供應商",
-    houses: "公共頻道",
-    keys: "API 金鑰",
-    admin: "管理",
-    addProvider: "新增供應商",
-    newKey: "建立金鑰",
-    wallet: "錢包",
-    emptyProviders: "還沒有供應商",
-    emptyHouses: "還沒有公共頻道",
-    emptyKeys: "還沒有 API 金鑰"
+    login: "登入",
+    intro: "使用密碼登入，或取得寄到電子郵件的一次性驗證碼。",
+    passwordMode: "密碼",
+    codeMode: "電子郵件驗證碼",
+    forgot: "忘記密碼？",
+    noAccount: "還沒有帳號？",
+    create: "建立帳號",
+    register: "建立帳號",
+    reset: "重設密碼",
+    closed: "註冊已關閉",
+    codeSent: "如果該電子郵件可以登入，驗證碼正在傳送中。"
   },
   ja: {
     langName: "日本語",
-    title: "magpie クラウドにサインイン",
-    sendCode: "コードを送信",
-    signIn: "サインイン",
-    codeSent: "そのアドレスでサインインできる場合、コードを送信しました。",
-    invalidCode: "このコードは無効か、期限切れです。",
-    member: "メンバー",
-    signOut: "サインアウト",
-    providers: "自分のプロバイダー",
-    houses: "ハウスチャンネル",
-    keys: "API キー",
-    admin: "管理",
-    addProvider: "プロバイダーを追加",
-    newKey: "キーを作成",
-    wallet: "ウォレット",
-    emptyProviders: "プロバイダーはまだありません",
-    emptyHouses: "ハウスチャンネルはまだありません",
-    emptyKeys: "API キーはまだありません"
+    login: "サインイン",
+    intro: "パスワード、またはメールで届くワンタイムコードを使います。",
+    passwordMode: "パスワード",
+    codeMode: "メールコード",
+    forgot: "パスワードをお忘れですか？",
+    noAccount: "magpie クラウドは初めてですか？",
+    create: "アカウント作成",
+    register: "アカウントを作成",
+    reset: "パスワードを再設定",
+    closed: "新規登録は停止しています",
+    codeSent: "そのアドレスでサインインできる場合、コードを送信しました。"
   },
   de: {
     langName: "Deutsch",
-    title: "Bei magpie Cloud anmelden",
-    sendCode: "Code senden",
-    signIn: "Anmelden",
-    codeSent: "Wenn diese Adresse sich anmelden kann, ist ein Code unterwegs.",
-    invalidCode: "Dieser Code ist ungültig oder abgelaufen.",
-    member: "Mitglied",
-    signOut: "Abmelden",
-    providers: "Deine Anbieter",
-    houses: "Hauskanäle",
-    keys: "API-Schlüssel",
-    admin: "Verwaltung",
-    addProvider: "Anbieter hinzufügen",
-    newKey: "Schlüssel erstellen",
-    wallet: "Guthaben",
-    emptyProviders: "Noch keine Anbieter",
-    emptyHouses: "Noch keine Hauskanäle",
-    emptyKeys: "Noch keine API-Schlüssel"
+    login: "Anmelden",
+    intro: "Nutze dein Passwort oder fordere einen Einmalcode per E-Mail an.",
+    passwordMode: "Passwort",
+    codeMode: "E-Mail-Code",
+    forgot: "Passwort vergessen?",
+    noAccount: "Neu bei magpie Cloud?",
+    create: "Konto erstellen",
+    register: "Konto erstellen",
+    reset: "Passwort zurücksetzen",
+    closed: "Registrierung geschlossen",
+    codeSent: "Wenn diese Adresse sich anmelden kann, ist ein Code unterwegs."
   }
 };
 
 async function asset(route, pathname) {
   let rel = null;
   if (pathname === "/" || pathname === "/cloud/" || pathname === "/cloud/index.html") rel = "index.html";
+  else if (pathname === "/login" || pathname === "/cloud/login.html") rel = "login.html";
+  else if (pathname === "/register" || pathname === "/cloud/register.html") rel = "register.html";
+  else if (pathname === "/reset" || pathname === "/cloud/reset.html") rel = "reset.html";
+  else if (pathname === "/app" || pathname === "/cloud/portal.html") rel = "portal.html";
   else if (pathname.startsWith("/cloud/")) rel = pathname.slice("/cloud/".length);
   if (rel == null) return false;
   const file = path.join(ASSETS, rel);
@@ -147,7 +119,7 @@ async function launch(engine) {
 
 async function open(browser, opts = {}) {
   const context = await browser.newContext({
-    viewport: { width: 900, height: 800 },
+    viewport: opts.viewport || { width: 900, height: 900 },
     locale: opts.locale || LOCALE[opts.lang] || "en-US",
     reducedMotion: "reduce"
   });
@@ -159,12 +131,19 @@ async function open(browser, opts = {}) {
 
   const state = {
     user: opts.user || null,
-    calls: [],
+    policy: Object.assign({}, POLICY, opts.policy || {}),
+    policyStatus: opts.policyStatus || 200,
     codeStatus: 200,
     codeReply: { ok: true, retryAfter: 0 },
+    passwordStatus: 0,
+    passwordReply: null,
     loginStatus: 0,
     loginReply: null,
-    adminCalls: 0
+    registerStatus: 0,
+    registerReply: null,
+    resetStatus: 0,
+    resetReply: null,
+    calls: []
   };
 
   await page.route("**/*", async (route) => {
@@ -178,123 +157,267 @@ async function open(browser, opts = {}) {
     if (p.startsWith("/api/")) state.calls.push({ method, path: p, body });
 
     if (await asset(route, p)) return;
+    if (p === "/api/auth/policy") {
+      if (state.policyStatus !== 200) return json(state.policyStatus, { error: "unavailable" });
+      return json(200, state.policy);
+    }
     if (p === "/api/auth/me") {
       return state.user ? json(200, { user: state.user }) : json(401, { error: "unauthenticated", message: "Sign in to continue." });
     }
-    if (p === "/api/auth/code" && method === "POST") {
+    if ((p === "/api/auth/code" || p === "/api/auth/register/code" || p === "/api/auth/reset/code") && method === "POST") {
       if (state.codeStatus !== 200) return json(state.codeStatus, state.codeReply);
-      return json(200, state.codeReply);
+      return json(200, { ok: true, retryAfter: 0 });
+    }
+    if (p === "/api/auth/password" && method === "POST") {
+      if (state.passwordStatus) return json(state.passwordStatus, state.passwordReply);
+      if (body && body.email === "ann@example.test" && body.password === PASSWORD) {
+        state.user = USER;
+        return json(200, { user: USER, expiresAt: "2027-01-01T00:00:00Z" });
+      }
+      return json(401, { error: "invalid_credentials", message: "That email and password do not match." });
     }
     if (p === "/api/auth/login" && method === "POST") {
       if (state.loginStatus) return json(state.loginStatus, state.loginReply);
-      const email = body && body.email;
-      const code = body && body.code;
-      if (email === "ann@example.test" && code === "123456") {
+      if (body && body.email === "ann@example.test" && body.code === "123456") {
         state.user = USER;
         return json(200, { user: USER, expiresAt: "2027-01-01T00:00:00Z" });
       }
       return json(401, { error: "invalid_code", message: "That code is not valid or has expired." });
     }
+    if (p === "/api/auth/register" && method === "POST") {
+      if (state.registerStatus) return json(state.registerStatus, state.registerReply);
+      if (!body || body.code !== "123456") return json(401, { error: "invalid_code" });
+      if (String(body.password || "").length < state.policy.passwordMinLength) return json(400, { error: "weak_password" });
+      state.user = Object.assign({}, USER, { email: body.email });
+      return json(200, { user: state.user, expiresAt: "2027-01-01T00:00:00Z" });
+    }
+    if (p === "/api/auth/reset" && method === "POST") {
+      if (state.resetStatus) return json(state.resetStatus, state.resetReply);
+      if (!body || body.code !== "123456") return json(401, { error: "invalid_code" });
+      state.user = USER;
+      return json(200, { user: USER, expiresAt: "2027-01-01T00:00:00Z" });
+    }
     if (p === "/api/auth/logout" && method === "POST") {
       state.user = null;
       return route.fulfill({ status: 204, body: "" });
     }
+
+    // the portal a successful sign-in opens
     if (p === "/api/cloud/wallet") return json(200, { balanceMicros: 0, heldMicros: 0, availableMicros: 0, currency: "CNY", paymentsEnabled: false });
-    if (p === "/api/cloud/providers") return json(200, []);
-    if (p === "/api/cloud/house-channels") return json(200, []);
-    if (p === "/api/cloud/keys") return json(200, []);
-    if (p.startsWith("/api/cloud/admin/house-channels")) {
-      state.adminCalls++;
+    if (p === "/api/cloud/providers" || p === "/api/cloud/house-channels" || p === "/api/cloud/keys" || p === "/api/cloud/groups" || p === "/api/cloud/usage" || p === "/api/cloud/orders") {
       return json(200, []);
     }
     return route.fulfill({ status: 404, body: "" });
   });
 
   const query = opts.query != null ? opts.query : opts.lang ? "?lang=" + encodeURIComponent(opts.lang) : "";
-  await page.goto(BASE + (opts.path || "/") + query);
+  await page.goto(BASE + (opts.path || "/login") + query);
+  if (opts.signedIn !== true) {
+    await page.waitForFunction(() => !!(window.magpieCloud && window.magpieCloud.auth && window.magpieCloud.auth.done()));
+  }
   return { context, page, state, errors };
 }
 
+const calls = (state, method, pathname) => state.calls.filter((c) => c.method === method && c.path === pathname);
+const at = (page) => page.evaluate(() => location.pathname);
+const line = async (page, selector) => (await page.locator(selector).innerText()).replace(/\s+/g, " ").trim();
+
 for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium", "webkit"])) {
-  test(`${engine}: cloud sign-in, session and sign-out in every language`, async (t) => {
-    assert(["chromium", "webkit"].includes(engine), "BROWSER must be chromium or webkit");
+  test(`${engine}: a password signs in, the portal opens, and sign-out returns`, async (t) => {
     const browser = await launch(engine);
     t.after(() => browser.close());
-    for (const lang of ["en", "zh", "zh-TW", "ja", "de"]) {
-      await t.test(lang, async () => {
-        const w = EXPECT[lang];
-        const { context, page, state, errors } = await open(browser, { lang });
+    const { context, page, state, errors } = await open(browser, { lang: "en" });
+    try {
+      assert.equal(await page.getAttribute("html", "lang"), "en");
+      assert.equal(await page.textContent("#authTitle"), EXPECT.en.login);
+      assert.equal(await page.textContent(".hero-sub"), EXPECT.en.intro);
+      assert.equal(await page.textContent("#authGo"), EXPECT.en.login);
+      assert.equal(await page.locator("#loginMode").isVisible(), true, "both methods are offered");
+      assert.equal(await page.textContent("#modePassword"), EXPECT.en.passwordMode);
+      assert.equal(await page.textContent("#modeCode"), EXPECT.en.codeMode);
+      assert.equal(await page.textContent("#forgotLink"), EXPECT.en.forgot);
+      assert.equal(await line(page, "#registerLine"), EXPECT.en.noAccount + " " + EXPECT.en.create);
+      assert.equal(await page.locator("#passwordGroup").isVisible(), true);
+      assert.equal(await page.locator("#codeGroup").isHidden(), true);
+
+      await page.fill("#email", "ann@example.test");
+      await page.fill("#password", PASSWORD);
+      await page.click("#authGo");
+      await page.locator("#portal").waitFor();
+      assert.equal(await at(page), "/app");
+      assert.equal(await page.textContent("#meEmail"), "ann@example.test");
+      const sent = calls(state, "POST", "/api/auth/password").pop();
+      assert.deepEqual(sent.body, { email: "ann@example.test", password: PASSWORD });
+      // the password is not left on the page after the page moved on
+      assert.equal(await page.evaluate(() => document.body.innerText.includes("correct-horse-battery")), false);
+
+      await page.click("#logout");
+      await page.locator("#loginForm").waitFor();
+      assert.equal(await at(page), "/login");
+      assert.equal(state.user, null);
+      assert.equal(await page.locator("#portal").count(), 0);
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test(`${engine}: a wrong password is named without a server detail`, async (t) => {
+    const browser = await launch(engine);
+    t.after(() => browser.close());
+    const { context, page, state, errors } = await open(browser, { lang: "en" });
+    try {
+      await page.fill("#email", "ann@example.test");
+      await page.fill("#password", "not-the-password");
+      await page.click("#authGo");
+      await page.locator("#authError").waitFor();
+      assert.equal(await page.textContent("#authError"), "That email and password do not match.");
+      assert.equal(await at(page), "/login");
+      assert.equal(await page.locator("#portal").count(), 0);
+
+      // a 500 whose body names the database says only that the server is down
+      state.passwordStatus = 500;
+      state.passwordReply = { error: "unavailable", message: "pq: password authentication failed for user magpie" };
+      await page.click("#authGo");
+      await page.locator("#authError").filter({ hasText: "The server is unavailable. Try again." }).waitFor();
+      const shown = await page.textContent("#authError");
+      assert.doesNotMatch(shown, /pq:|magpie|authentication/i);
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test(`${engine}: the email-code path sends a code and signs in`, async (t) => {
+    const browser = await launch(engine);
+    t.after(() => browser.close());
+    const { context, page, state, errors } = await open(browser, { lang: "en" });
+    try {
+      await page.click("#modeCode");
+      assert.equal(await page.locator("#passwordGroup").isHidden(), true);
+      assert.equal(await page.locator("#sendRow").isVisible(), true);
+      assert.equal(await page.textContent("#authGo"), "Send code");
+
+      await page.fill("#email", "ann@example.test");
+      await page.click("#authGo");
+      await page.locator("#codeGroup").waitFor();
+      assert.equal(await page.textContent("#authStatus"), EXPECT.en.codeSent);
+      assert.equal(await page.textContent("#authGo"), "Sign in");
+      assert.deepEqual(calls(state, "POST", "/api/auth/code").pop().body, { email: "ann@example.test" });
+
+      await page.fill("#code", "000000");
+      await page.click("#authGo");
+      await page.locator("#authError").waitFor();
+      assert.equal(await page.textContent("#authError"), "That code is not valid or has expired.");
+      assert.equal(await page.locator("#portal").count(), 0);
+
+      await page.fill("#code", "123456");
+      await page.click("#authGo");
+      await page.locator("#portal").waitFor();
+      assert.equal(await at(page), "/app");
+
+      // switching back to a password puts the code away
+      state.user = null;
+      await page.goto(BASE + "/login?lang=en");
+      await page.locator("#loginForm").waitFor();
+      await page.click("#modeCode");
+      await page.fill("#email", "ann@example.test");
+      await page.click("#sendCodeBtn");
+      await page.locator("#codeGroup").waitFor();
+      await page.click("#modePassword");
+      assert.equal(await page.locator("#codeGroup").isHidden(), true);
+      assert.equal(await page.locator("#passwordGroup").isVisible(), true);
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test(`${engine}: the policy chooses which sign-in methods exist`, async (t) => {
+    const browser = await launch(engine);
+    t.after(() => browser.close());
+
+    {
+      const { context, page, errors } = await open(browser, { lang: "en", policy: { passwordLoginEnabled: false } });
+      try {
+        assert.equal(await page.locator("#loginMode").isHidden(), true);
+        assert.equal(await page.locator("#passwordGroup").isHidden(), true);
+        assert.equal(await page.locator("#sendRow").isVisible(), true);
+        assert.equal(await page.textContent("#loginPolicyNote"), "Password sign-in is off on this deployment. Use an email code.");
+        assert.equal(await page.textContent("#authGo"), "Send code");
+        assert.equal(await page.locator("#forgotLink").isHidden(), true);
+        assert.deepEqual(errors, []);
+      } finally {
+        await context.close();
+      }
+    }
+
+    {
+      const { context, page, errors } = await open(browser, { lang: "en", policy: { codeLoginEnabled: false } });
+      try {
+        assert.equal(await page.locator("#loginMode").isHidden(), true);
+        assert.equal(await page.locator("#passwordGroup").isVisible(), true);
+        assert.equal(await page.locator("#sendRow").isHidden(), true);
+        assert.equal(await page.textContent("#loginPolicyNote"), "Email-code sign-in is off on this deployment. Use your password.");
+        assert.equal(await page.locator("#forgotLink").isVisible(), true);
+        assert.deepEqual(errors, []);
+      } finally {
+        await context.close();
+      }
+    }
+
+    {
+      const { context, page, errors } = await open(browser, { lang: "en", policy: { passwordLoginEnabled: false, codeLoginEnabled: false } });
+      try {
+        assert.equal(await page.locator("#loginUnavailable").isVisible(), true);
+        assert.equal(await page.locator("#loginForm").isHidden(), true);
+        assert.equal(await page.locator("#registerLine").isHidden(), true);
+        assert.equal(await page.textContent("#loginUnavailable h2"), "Sign-in is unavailable");
+        assert.deepEqual(errors, []);
+      } finally {
+        await context.close();
+      }
+    }
+
+    {
+      const { context, page, errors } = await open(browser, { lang: "en", policy: { registrationEnabled: false } });
+      try {
+        assert.equal(await page.locator("#registerLine").isHidden(), true);
+        assert.equal(await page.locator("#registerClosedLine").isVisible(), true);
+        assert.equal(await page.getAttribute("#registerClosedLine", "hidden"), null);
+        assert.deepEqual(errors, []);
+      } finally {
+        await context.close();
+      }
+    }
+  });
+
+  test(`${engine}: the portal sends an anonymous reader to sign in`, async (t) => {
+    const browser = await launch(engine);
+    t.after(() => browser.close());
+    const { context, page, state, errors } = await open(browser, { lang: "en", path: "/app", signedIn: true });
+    try {
+      await page.locator("#loginForm").waitFor();
+      assert.equal(await at(page), "/login");
+      assert.equal(state.user, null);
+      assert.equal(await page.textContent("#authTitle"), EXPECT.en.login);
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test(`${engine}: a signed-in reader never sees a sign-in form`, async (t) => {
+    const browser = await launch(engine);
+    t.after(() => browser.close());
+    for (const pagePath of ["/login", "/register", "/reset"]) {
+      await t.test(pagePath, async () => {
+        const { context, page, state, errors } = await open(browser, { lang: "en", path: pagePath, user: USER, signedIn: true });
         try {
-          // the page picks the language asked for, before any read
-          assert.equal(await page.getAttribute("html", "lang"), lang);
-          assert.equal(await page.textContent("#signin h1"), w.title);
-          assert.equal(await page.textContent("#authGo"), w.sendCode);
-          assert.equal(await page.textContent("#langNow"), w.langName);
-          assert.equal(await page.locator("#signin").isVisible(), true);
-          assert.equal(await page.locator("#portal").isHidden(), true);
-          assert.equal(await page.locator("#session").isHidden(), true);
-
-          // sending a code tells nothing about whether the address has an account
-          await page.fill("#email", "ann@example.test");
-          await page.click("#authGo");
-          await page.locator("#codeGroup").waitFor();
-          const sent = state.calls.find((c) => c.method === "POST" && c.path === "/api/auth/code");
-          assert.deepEqual(sent.body, { email: "ann@example.test" });
-          assert.equal(await page.textContent("#authStatus"), w.codeSent);
-          assert.equal(await page.textContent("#authGo"), w.signIn);
-
-          // a wrong code is said in the page's language, and opens nothing
-          await page.fill("#code", "000000");
-          await page.click("#authGo");
-          await page.locator("#authError").waitFor();
-          assert.equal(await page.textContent("#authError"), w.invalidCode);
-          assert.equal(await page.locator("#portal").isHidden(), true);
-          const wrong = state.calls.find((c) => c.method === "POST" && c.path === "/api/auth/login");
-          assert.deepEqual(wrong.body, { email: "ann@example.test", code: "000000" });
-
-          // the code from the mail signs in; the account and its role are shown
-          await page.fill("#code", "123456");
-          await page.click("#authGo");
           await page.locator("#portal").waitFor();
-          await page.locator("#providersState .state-title").waitFor();
           assert.equal(await page.textContent("#meEmail"), "ann@example.test");
-          assert.equal(await page.textContent("#meRole"), w.member);
-          assert.equal(await page.textContent("#logout"), w.signOut);
-          assert.equal(await page.locator("#signin").isHidden(), true);
-          assert.equal(await page.locator("#session").isVisible(), true);
-          assert.equal(await page.locator("#adminPanel").isHidden(), true, "a member is not shown administration");
-          assert.equal(state.adminCalls, 0, "a member's page never asks for administration");
-
-          // every section speaks the language, and an empty read says so
-          assert.equal(await page.textContent("#walletPanel h2"), w.wallet);
-          assert.equal(await page.textContent("#providersPanel h2"), w.providers);
-          assert.equal(await page.textContent("#housesPanel h2"), w.houses);
-          assert.equal(await page.textContent("#keysPanel h2"), w.keys);
-          assert.equal(await page.textContent("#adminPanel h2"), w.admin);
-          assert.equal(await page.textContent("#addProvider"), w.addProvider);
-          assert.equal(await page.textContent("#newKey"), w.newKey);
-          assert.equal(await page.textContent("#providersState .state-title"), w.emptyProviders);
-          assert.equal(await page.textContent("#housesState .state-title"), w.emptyHouses);
-          assert.equal(await page.textContent("#keysState .state-title"), w.emptyKeys);
-          assert.equal(await page.locator("#providersList .row").count(), 0);
-
-          // a reload keeps the server-side session: no code is asked again
-          await page.reload();
-          await page.locator("#portal").waitFor();
-          assert.equal(await page.locator("#signin").isHidden(), true);
-          assert.equal(await page.textContent("#meEmail"), "ann@example.test");
-
-          // sign-out clears the cookie at the server and returns to the form
-          await page.click("#logout");
-          await page.locator("#signin").waitFor();
-          assert.equal(await page.locator("#portal").isHidden(), true);
-          assert.equal(await page.locator("#session").isHidden(), true);
-          assert.equal(state.user, null);
-          assert.ok(state.calls.some((c) => c.method === "POST" && c.path === "/api/auth/logout"));
-          await page.reload();
-          await page.locator("#signin").waitFor();
-          assert.equal(await page.locator("#portal").isHidden(), true);
-
+          assert.equal(await page.locator("#loginForm").count(), 0);
+          assert.equal(state.calls.some((c) => c.path === "/api/auth/password"), false);
           assert.deepEqual(errors, []);
         } finally {
           await context.close();
@@ -303,113 +426,214 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
     }
   });
 
-  test(`${engine}: the language menu changes every string and is kept`, async (t) => {
+  test(`${engine}: a verified code and a password create the account`, async (t) => {
     const browser = await launch(engine);
     t.after(() => browser.close());
-    const { context, page, errors } = await open(browser, { lang: "en" });
+    const { context, page, state, errors } = await open(browser, { lang: "en", path: "/register" });
     try {
-      assert.equal(await page.textContent("#signin h1"), EXPECT.en.title);
+      assert.equal(await page.textContent("#authTitle"), EXPECT.en.register);
+      assert.equal(await page.locator("#registerForm").isVisible(), true);
+      assert.equal(await page.textContent("#passwordHint"), "At least 12 characters.");
 
-      await page.click("#langBtn");
-      await page.locator("#langMenu").waitFor();
-      assert.equal(await page.locator("#langMenu button[role=menuitemradio]").count(), 5);
-      assert.match(await page.locator('#langMenu button[aria-checked="true"]').textContent(), /English/);
-      await settled(page);
-      await page.keyboard.press("Escape");
-      await page.locator("#langMenu").waitFor({ state: "hidden" });
-      assert.equal(await page.getAttribute("#langBtn", "aria-expanded"), "false");
+      await page.fill("#email", "new@example.test");
+      await page.click("#sendCodeBtn");
+      await page.locator("#codeGroup").waitFor();
+      assert.equal(await page.textContent("#authStatus"), "If that address can be registered, a code is on its way.");
+      assert.deepEqual(calls(state, "POST", "/api/auth/register/code").pop().body, { email: "new@example.test" });
 
-      await page.click("#langBtn");
-      await page.locator("#langMenu").waitFor();
-      await page.locator("#langMenu button", { hasText: "日本語" }).click();
-      await page.locator("#signin h1").filter({ hasText: EXPECT.ja.title }).waitFor();
-      assert.equal(await page.textContent("#authGo"), EXPECT.ja.sendCode);
-      assert.equal(await page.getAttribute("html", "lang"), "ja");
-      assert.equal(await page.evaluate(() => localStorage.getItem("magpie.cloud.lang")), "ja");
+      await page.fill("#code", "123456");
+      await page.fill("#password", "short");
+      await page.fill("#passwordConfirm", "short");
+      await page.click("#authGo");
+      await page.locator("#authError").waitFor();
+      assert.equal(await page.textContent("#authError"), "That password is too short.");
+      assert.equal(calls(state, "POST", "/api/auth/register").length, 0);
 
-      // a later visit without the query keeps the reader's pick
-      await page.goto(BASE + "/");
-      await page.locator("#signin h1").filter({ hasText: EXPECT.ja.title }).waitFor();
-      assert.equal(await page.evaluate(() => window.magpieCloud.lang()), "ja");
-      assert.equal(await page.textContent("#authGo"), EXPECT.ja.sendCode);
+      await page.fill("#password", "a-long-password");
+      await page.fill("#passwordConfirm", "a-different-one");
+      await page.click("#authGo");
+      assert.equal(await page.textContent("#authError"), "The two passwords do not match.");
+      assert.equal(calls(state, "POST", "/api/auth/register").length, 0);
+
+      await page.fill("#password", "a-long-password");
+      await page.fill("#passwordConfirm", "a-long-password");
+      await page.click("#authGo");
+      await page.locator("#portal").waitFor();
+      assert.equal(await at(page), "/app");
+      assert.deepEqual(calls(state, "POST", "/api/auth/register").pop().body, {
+        email: "new@example.test",
+        code: "123456",
+        password: "a-long-password"
+      });
       assert.deepEqual(errors, []);
     } finally {
       await context.close();
     }
   });
 
-  test(`${engine}: the page opens at /cloud/ too`, async (t) => {
+  test(`${engine}: a closed deployment takes no registration`, async (t) => {
     const browser = await launch(engine);
     t.after(() => browser.close());
-    const { context, page, errors } = await open(browser, { lang: "en", path: "/cloud/" });
+    const { context, page, state, errors } = await open(browser, { lang: "en", path: "/register", policy: { registrationEnabled: false } });
     try {
-      await page.locator("#signin h1").filter({ hasText: EXPECT.en.title }).waitFor();
-      assert.equal(await page.getAttribute("html", "lang"), "en");
-      // the script and the sheet were found beside the page, not at the root
-      assert.equal(await page.evaluate(() => !!window.magpieCloud), true);
-      assert.equal(
-        await page.evaluate(() => [...document.styleSheets].some((s) => s.href && s.href.endsWith("/cloud/style.css"))),
-        true
-      );
+      assert.equal(await page.locator("#registerClosed").isVisible(), true);
+      assert.equal(await page.locator("#registerForm").isHidden(), true);
+      assert.equal(await page.textContent("#registerClosed h2"), EXPECT.en.closed);
+      assert.equal(await page.textContent("#registerClosed a"), "Sign in");
+      await page.click("#registerClosed a");
+      await page.locator("#loginForm").waitFor();
+      assert.equal(await at(page), "/login");
+      assert.equal(state.calls.some((c) => c.path === "/api/auth/register/code"), false);
       assert.deepEqual(errors, []);
     } finally {
       await context.close();
     }
   });
 
-  test(`${engine}: the browser's own language is used when the page names none`, async (t) => {
+  test(`${engine}: a code sets a new password and signs the reader in`, async (t) => {
     const browser = await launch(engine);
     t.after(() => browser.close());
-    const { context, page, errors } = await open(browser, { query: "", locale: "zh-TW" });
+    const { context, page, state, errors } = await open(browser, { lang: "en", path: "/reset" });
     try {
-      await page.locator("#signin h1").filter({ hasText: EXPECT["zh-TW"].title }).waitFor();
-      assert.equal(await page.getAttribute("html", "lang"), "zh-TW");
-      assert.equal(await page.textContent("#authGo"), EXPECT["zh-TW"].sendCode);
+      assert.equal(await page.textContent("#authTitle"), EXPECT.en.reset);
+      assert.equal(await page.locator("#resetForm").isVisible(), true);
+      assert.equal(await page.textContent("#passwordHint"), "At least 12 characters.");
+
+      await page.fill("#email", "ann@example.test");
+      await page.click("#sendCodeBtn");
+      await page.locator("#codeGroup").waitFor();
+      assert.equal(await page.textContent("#authStatus"), "If that address has an account, a code is on its way.");
+      assert.deepEqual(calls(state, "POST", "/api/auth/reset/code").pop().body, { email: "ann@example.test" });
+
+      await page.fill("#code", "123456");
+      await page.fill("#password", "a-long-password");
+      await page.fill("#passwordConfirm", "a-long-password");
+      await page.click("#authGo");
+      await page.locator("#portal").waitFor();
+      assert.equal(await at(page), "/app");
+      assert.deepEqual(calls(state, "POST", "/api/auth/reset").pop().body, {
+        email: "ann@example.test",
+        code: "123456",
+        password: "a-long-password"
+      });
       assert.deepEqual(errors, []);
     } finally {
       await context.close();
+    }
+
+    // a deployment with passwords off does not offer a reset that cannot work
+    const off = await open(browser, { lang: "en", path: "/reset", policy: { passwordLoginEnabled: false } });
+    try {
+      assert.equal(await off.page.locator("#resetUnavailable").isVisible(), true);
+      assert.equal(await off.page.locator("#resetForm").isHidden(), true);
+      assert.deepEqual(off.errors, []);
+    } finally {
+      await off.context.close();
+    }
+  });
+
+  test(`${engine}: a rate-limited send names the wait`, async (t) => {
+    const browser = await launch(engine);
+    t.after(() => browser.close());
+    const { context, page, state, errors } = await open(browser, { lang: "en" });
+    try {
+      await page.click("#modeCode");
+      await page.fill("#email", "ann@example.test");
+      state.codeStatus = 429;
+      state.codeReply = { error: "rate_limited", message: "Too many requests. Try again later.", retryAfter: 7 };
+      await page.click("#sendCodeBtn");
+      await page.locator("#authError").waitFor();
+      assert.equal(await page.textContent("#authError"), "Too many requests. Try again in 7 seconds.");
+      assert.equal(await page.locator("#codeGroup").isHidden(), true);
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test(`${engine}: the sign-in pages fit a phone`, async (t) => {
+    const browser = await launch(engine);
+    t.after(() => browser.close());
+    for (const pagePath of ["/login", "/register", "/reset"]) {
+      await t.test(pagePath, async () => {
+        const { context, page, errors } = await open(browser, {
+          lang: "de",
+          path: pagePath,
+          viewport: { width: 360, height: 800 }
+        });
+        try {
+          assert.equal(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+            true,
+            pagePath + " has no sideways scroll"
+          );
+          assert.equal(await page.locator(".auth-card").isVisible(), true);
+          assert.equal(await page.locator("#authGo").isVisible(), true);
+          assert.deepEqual(errors, []);
+        } finally {
+          await context.close();
+        }
+      });
+    }
+  });
+
+  test(`${engine}: every sign-in page speaks every language`, async (t) => {
+    const browser = await launch(engine);
+    t.after(() => browser.close());
+    for (const lang of ["en", "zh", "zh-TW", "ja", "de"]) {
+      await t.test(lang, async () => {
+        const w = EXPECT[lang];
+        const login = await open(browser, { lang });
+        try {
+          assert.equal(await login.page.getAttribute("html", "lang"), lang);
+          assert.equal(await login.page.textContent("#authTitle"), w.login);
+          assert.equal(await login.page.textContent(".hero-sub"), w.intro);
+          assert.equal(await login.page.textContent("#authGo"), w.login);
+          assert.equal(await login.page.textContent("#modePassword"), w.passwordMode);
+          assert.equal(await login.page.textContent("#modeCode"), w.codeMode);
+          assert.equal(await login.page.textContent("#forgotLink"), w.forgot);
+          assert.equal(await line(login.page, "#registerLine"), w.noAccount + " " + w.create);
+          assert.equal(await login.page.textContent("#langNow"), w.langName);
+          assert.deepEqual(login.errors, []);
+        } finally {
+          await login.context.close();
+        }
+
+        for (const [pagePath, key] of [["/register", "register"], ["/reset", "reset"]]) {
+          const w2 = await open(browser, { lang, path: pagePath });
+          try {
+            assert.equal(await w2.page.textContent("#authTitle"), w[key], pagePath + " " + lang);
+            assert.deepEqual(w2.errors, []);
+          } finally {
+            await w2.context.close();
+          }
+        }
+      });
     }
   });
 }
 
-test("chromium: a rate-limited send names the wait, and a failed one names no server detail", async (t) => {
+test("chromium: the password is only posted, never stored or drawn", async (t) => {
   const browser = await launch("chromium");
   t.after(() => browser.close());
   const { context, page, state, errors } = await open(browser, { lang: "en" });
   try {
     await page.fill("#email", "ann@example.test");
-
-    // a 429's retryAfter is a number, and it is said in words
-    state.codeStatus = 429;
-    state.codeReply = { error: "rate_limited", message: "Too many requests. Try again later.", retryAfter: 7 };
+    await page.fill("#password", PASSWORD);
     await page.click("#authGo");
-    await page.locator("#authError").waitFor();
-    assert.equal(await page.textContent("#authError"), "Too many requests. Try again in 7 seconds.");
-
-    // a 500 whose body names the database says only that the server is down
-    state.codeStatus = 500;
-    state.codeReply = { error: "unavailable", message: "pq: password authentication failed for user magpie" };
-    await page.click("#authGo");
-    await page.locator("#authError").filter({ hasText: "The server is unavailable. Try again." }).waitFor();
-    const shown = await page.textContent("#authError");
-    assert.doesNotMatch(shown, /password|pq:|magpie/i);
-    assert.equal(await page.locator("#codeGroup").isHidden(), true);
-    assert.equal(await page.locator("#portal").isHidden(), true);
+    await page.locator("#portal").waitFor();
+    const posted = calls(state, "POST", "/api/auth/password").pop();
+    assert.equal(posted.body.password, PASSWORD);
+    const stored = await page.evaluate(() => {
+      const all = [];
+      for (let i = 0; i < localStorage.length; i++) all.push(localStorage.getItem(localStorage.key(i)));
+      for (let i = 0; i < sessionStorage.length; i++) all.push(sessionStorage.getItem(sessionStorage.key(i)));
+      all.push(document.body.innerText, document.documentElement.outerHTML);
+      return all.join("\n");
+    });
+    assert.equal(stored.includes(PASSWORD), false, "the password is not kept in storage or the page");
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
   }
-});
-
-test("chromium: the page has no inline script, no native select and no external asset", async () => {
-  const html = await fs.readFile(path.join(ASSETS, "index.html"), "utf8");
-  assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/i, "every script is a file, for the CSP");
-  assert.doesNotMatch(html, /\son[a-z]+\s*=/i, "no inline event handler");
-  assert.doesNotMatch(html, /<select\b/i, "no native select");
-  assert.doesNotMatch(html, /(?:src|href)="https?:\/\//i, "no external asset");
-  assert.doesNotMatch(html, /javascript:/i);
-  assert.match(html, /http-equiv="Content-Security-Policy"[^>]*script-src 'self'/, "the page carries the policy on /cloud/ too");
-  const js = await fs.readFile(path.join(ASSETS, "app.js"), "utf8");
-  assert.doesNotMatch(js, /document\.write\s*\(/, "nothing writes HTML from a reply");
-  assert.doesNotMatch(js, /\.innerHTML\s*=/, "nothing writes HTML from a reply");
 });

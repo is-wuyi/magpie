@@ -123,6 +123,10 @@ func (r *cloudRuntime) Handler() http.Handler {
 		if name == "cloud/" {
 			name = "cloud/index.html"
 		}
+		if strings.HasSuffix(name, ".html") {
+			serveCloudHTML(w, name)
+			return
+		}
 		b, err := fs.ReadFile(staticFS(), name)
 		if err != nil {
 			http.NotFound(w, req)
@@ -134,27 +138,55 @@ func (r *cloudRuntime) Handler() http.Handler {
 			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 		case strings.HasSuffix(name, ".css"):
 			w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		case strings.HasSuffix(name, ".html"):
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		}
 		_, _ = w.Write(b)
+	})
+	mux.HandleFunc("/login", func(w http.ResponseWriter, req *http.Request) {
+		r.serveAuthPage(w, req, "cloud/login.html")
+	})
+	mux.HandleFunc("/register", func(w http.ResponseWriter, req *http.Request) {
+		r.serveAuthPage(w, req, "cloud/register.html")
+	})
+	mux.HandleFunc("/reset", func(w http.ResponseWriter, req *http.Request) {
+		r.serveAuthPage(w, req, "cloud/reset.html")
+	})
+	mux.HandleFunc("/app", func(w http.ResponseWriter, req *http.Request) {
+		if _, err := r.auth.AuthenticateRequest(req); err != nil {
+			http.Redirect(w, req, "/login", http.StatusFound)
+			return
+		}
+		serveCloudHTML(w, "cloud/portal.html")
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path != "/" {
 			http.NotFound(w, req)
 			return
 		}
-		b, err := fs.ReadFile(staticFS(), "cloud/index.html")
-		if err != nil {
-			http.Error(w, "cloud page is unavailable", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
-		_, _ = w.Write(b)
+		serveCloudHTML(w, "cloud/index.html")
 	})
 	return webOwnPage(mux)
+}
+
+const cloudPageCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+
+func serveCloudHTML(w http.ResponseWriter, name string) {
+	b, err := fs.ReadFile(staticFS(), name)
+	if err != nil {
+		http.Error(w, "cloud page is unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Security-Policy", cloudPageCSP)
+	_, _ = w.Write(b)
+}
+
+func (r *cloudRuntime) serveAuthPage(w http.ResponseWriter, req *http.Request, name string) {
+	if _, err := r.auth.AuthenticateRequest(req); err == nil {
+		http.Redirect(w, req, "/app", http.StatusFound)
+		return
+	}
+	serveCloudHTML(w, name)
 }
 
 func (r *cloudRuntime) userAPI() http.Handler {
@@ -253,6 +285,7 @@ func (r *cloudRuntime) adminAPI() http.Handler {
 	mux := http.NewServeMux()
 	r.registerAdminPriceRoutes(mux)
 	r.registerAdminRoutes(mux)
+	r.registerAdminAuthPolicyRoutes(mux)
 	mux.HandleFunc("GET /api/cloud/admin/house-channels", func(w http.ResponseWriter, req *http.Request) {
 		out, err := r.channels.ListHouseChannels(req.Context(), true)
 		respondCloud(w, out, err)

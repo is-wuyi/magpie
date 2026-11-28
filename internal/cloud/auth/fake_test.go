@@ -24,6 +24,10 @@ type fakeRepo struct {
 	byEmail  map[string]uuid.UUID
 	sessions map[string]store.Session
 
+	policy      store.AuthPolicy
+	credentials map[string]store.UserCredentials
+	attempts    []passwordAttempt
+
 	lastIssue  store.IssueEmailCodeParams
 	lastEnsure store.EnsureVerifiedUserParams
 	deleted    []uuid.UUID
@@ -57,6 +61,10 @@ func newFakeRepo() *fakeRepo {
 		users:    make(map[uuid.UUID]store.User),
 		byEmail:  make(map[string]uuid.UUID),
 		sessions: make(map[string]store.Session),
+		policy: store.AuthPolicy{
+			RegistrationEnabled: true, PasswordLoginEnabled: true, CodeLoginEnabled: true, PasswordMinLength: 12, Version: 1,
+		},
+		credentials: make(map[string]store.UserCredentials),
 	}
 }
 
@@ -349,6 +357,139 @@ func (f *fakeRepo) RevokeUserSessions(ctx context.Context, userID uuid.UUID, now
 		}
 	}
 	return u.AuthVersion, nil
+}
+
+type passwordAttempt struct {
+	email string
+	ip    string
+	at    time.Time
+}
+
+func (f *fakeRepo) AuthPolicy(context.Context) (store.AuthPolicy, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.policy, nil
+}
+
+func (f *fakeRepo) CreateRegisteredUser(_ context.Context, p store.CreateRegisteredUserParams) (store.User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, exists := f.byEmail[p.EmailNormalized]; exists {
+		return store.User{}, store.ErrEmailTaken
+	}
+	c, ok := f.codes[p.CodeID]
+	if !ok || c.Purpose != PurposeRegister || !bytes.Equal(c.CodeHash, p.CodeHash) {
+		return store.User{}, store.ErrCodeUnavailable
+	}
+	if err := f.consumeCodeLocked(p.CodeID, p.CodeHash, p.VerifiedAt); err != nil {
+		return store.User{}, err
+	}
+	role := store.RoleUser
+	if p.PromoteAdmin {
+		role = store.RoleAdmin
+	}
+	at := p.VerifiedAt
+	u := store.User{ID: uuid.New(), Email: p.Email, EmailNormalized: p.EmailNormalized, Role: role, Status: store.StatusActive,
+		AuthVersion: 1, EmailVerifiedAt: &at, CreatedAt: at, UpdatedAt: at}
+	f.users[u.ID] = u
+	f.byEmail[u.EmailNormalized] = u.ID
+	f.credentials[u.EmailNormalized] = store.UserCredentials{User: u, PasswordHash: p.PasswordHash, PasswordHashVersion: p.PasswordHashVersion}
+	return u, nil
+}
+
+func (f *fakeRepo) CredentialsByEmail(_ context.Context, emailNormalized string) (store.UserCredentials, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if c, ok := f.credentials[emailNormalized]; ok {
+		return c, nil
+	}
+	id, ok := f.byEmail[emailNormalized]
+	if !ok {
+		return store.UserCredentials{}, store.ErrNotFound
+	}
+	return store.UserCredentials{User: f.users[id]}, nil
+}
+
+func (f *fakeRepo) ResetPassword(_ context.Context, p store.ResetPasswordParams) (store.User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	id, ok := f.byEmail[p.EmailNormalized]
+	if !ok {
+		return store.User{}, store.ErrNotFound
+	}
+	c, ok := f.codes[p.CodeID]
+	if !ok || c.Purpose != PurposeReset || !bytes.Equal(c.CodeHash, p.CodeHash) {
+		return store.User{}, store.ErrCodeUnavailable
+	}
+	if err := f.consumeCodeLocked(p.CodeID, p.CodeHash, p.Now); err != nil {
+		return store.User{}, err
+	}
+	u := f.users[id]
+	u.AuthVersion++
+	u.UpdatedAt = p.Now
+	f.users[id] = u
+	credentials := f.credentials[p.EmailNormalized]
+	credentials.User = u
+	credentials.PasswordHash = p.PasswordHash
+	credentials.PasswordHashVersion = p.PasswordHashVersion
+	f.credentials[p.EmailNormalized] = credentials
+	for key, session := range f.sessions {
+		if session.UserID == id && session.RevokedAt == nil {
+			at := p.Now
+			session.RevokedAt = &at
+			f.sessions[key] = session
+		}
+	}
+	return u, nil
+}
+
+func (f *fakeRepo) consumeCodeLocked(id uuid.UUID, hash []byte, now time.Time) error {
+	c, ok := f.codes[id]
+	if !ok || c.ConsumedAt != nil || c.Attempts >= c.MaxAttempts || !c.ExpiresAt.After(now) || !bytes.Equal(c.CodeHash, hash) {
+		return store.ErrCodeUnavailable
+	}
+	at := now
+	c.ConsumedAt = &at
+	f.codes[id] = c
+	return nil
+}
+
+func (f *fakeRepo) RecordAuthAttempt(_ context.Context, emailNormalized, requestIP string, now time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.attempts = append(f.attempts, passwordAttempt{email: emailNormalized, ip: requestIP, at: now})
+	return nil
+}
+
+func (f *fakeRepo) AuthFailureCounts(_ context.Context, emailNormalized, requestIP string, since time.Time) (store.FailureCounts, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out store.FailureCounts
+	for _, attempt := range f.attempts {
+		if !attempt.at.After(since) {
+			continue
+		}
+		if attempt.email == emailNormalized {
+			out.ByEmail++
+		}
+		if requestIP != "" && attempt.ip == requestIP {
+			out.ByIP++
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) ClearAuthAttempts(_ context.Context, emailNormalized string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	kept := f.attempts[:0]
+	for _, attempt := range f.attempts {
+		if attempt.email != emailNormalized {
+			kept = append(kept, attempt)
+		}
+	}
+	f.attempts = kept
+	return nil
 }
 
 // onlyCode returns the newest code the repo holds.

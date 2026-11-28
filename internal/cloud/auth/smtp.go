@@ -250,16 +250,23 @@ func (s *SMTPSender) tlsConfig() *tls.Config {
 // buildLoginCodeMessage returns an RFC 5322 text/plain message with CRLF
 // line endings. It carries the code in the body only.
 func buildLoginCodeMessage(from mail.Address, to string, msg LoginCodeMessage, now time.Time) []byte {
+	subject, intro := "Your magpie sign-in code", "Your sign-in code is:"
+	switch msg.Purpose {
+	case PurposeRegister:
+		subject, intro = "Your magpie registration code", "Your registration code is:"
+	case PurposeReset:
+		subject, intro = "Your magpie password-reset code", "Your password-reset code is:"
+	}
 	var b strings.Builder
 	b.WriteString("From: " + from.String() + "\r\n")
 	b.WriteString("To: " + to + "\r\n")
-	b.WriteString("Subject: Your magpie sign-in code\r\n")
+	b.WriteString("Subject: " + subject + "\r\n")
 	b.WriteString("Date: " + now.Format(time.RFC1123Z) + "\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: text/plain; charset=\"utf-8\"\r\n")
 	b.WriteString("Content-Transfer-Encoding: 8bit\r\n")
 	b.WriteString("\r\n")
-	b.WriteString("Your sign-in code is:\r\n\r\n")
+	b.WriteString(intro + "\r\n\r\n")
 	b.WriteString("    " + msg.Code + "\r\n\r\n")
 	if remaining := msg.ExpiresAt.Sub(now); remaining > 0 {
 		when := remaining.Round(time.Minute).String()

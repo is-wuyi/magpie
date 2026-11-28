@@ -33,6 +33,11 @@ func newTestService(t *testing.T, repo Repository, mailer Mailer, tweak func(*Co
 
 func mustRequestCode(t *testing.T, svc *Service, mail *fakeMailer, email string) string {
 	t.Helper()
+	if _, err := svc.repo.EnsureVerifiedUser(context.Background(), store.EnsureVerifiedUserParams{
+		Email: email, EmailNormalized: email, VerifiedAt: testNowTime, PromoteAdmin: svc.isAdmin(email),
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.RequestLoginCode(context.Background(), CodeRequest{Email: email, IP: "203.0.113.9"}); err != nil {
 		t.Fatal(err)
 	}
@@ -417,7 +422,10 @@ func TestVerifyLoginCodeAccountStates(t *testing.T) {
 	repo, mail := newFakeRepo(), &fakeMailer{}
 	svc := newTestService(t, repo, mail, nil)
 	code := mustRequestCode(t, svc, mail, "disabled@example.com")
-	repo.ensureErr = store.ErrUserDisabled
+	id := repo.byEmail["disabled@example.com"]
+	u := repo.users[id]
+	u.Status = store.StatusDisabled
+	repo.users[id] = u
 	if _, err := svc.VerifyLoginCode(context.Background(), LoginRequest{Email: "disabled@example.com", Code: code}); !errors.Is(err, ErrAccountDisabled) {
 		t.Fatalf("disabled: %v", err)
 	}

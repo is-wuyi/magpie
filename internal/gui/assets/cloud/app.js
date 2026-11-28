@@ -1,213 +1,40 @@
-// magpie cloud — the portal's page. It talks to the four auth routes and the
-// cloud API in internal/gui/cloud.go, and to nothing else. The page holds no
-// upstream credential beyond the field it was typed into: a provider's key is
-// sent once, on Save, and the gateway's own new secret is drawn once, from
-// the create reply, until Done clears it.
+// magpie cloud — the portal's page. It talks to the cloud API in
+// internal/gui/cloud.go and to the session route, and to nothing else. The
+// page holds no upstream credential beyond the field it was typed into: a
+// provider's key is sent once, on Save, and the gateway's own new secret is
+// drawn once, from the create reply, until Done clears it. Sign-in,
+// registration and password reset live on pages of their own (auth.js).
 "use strict";
 
 (function () {
-  // ---------------------------------------------------------------- copy
-  // Every string the reader sees is here, in the five languages the app
-  // ships. A key missing from a language falls back to English; the test
-  // beside this page checks that no key or placeholder is missing.
-  const DICT = globalThis.magpieCloudI18N;
-
-  const LANGS = ["en", "zh", "zh-TW", "ja", "de"];
-  const LANG_NAMES = { en: "English", zh: "简体中文", "zh-TW": "繁體中文", ja: "日本語", de: "Deutsch" };
-  const LOCALES = { en: "en-US", zh: "zh-CN", "zh-TW": "zh-TW", ja: "ja-JP", de: "de-DE" };
-  const LANG_KEY = "magpie.cloud.lang";
+  const shared = window.magpieCloudShared;
+  const {
+    byId, h, clear, show, setPipeText, setFormError, slugify, isHttpURL, readModels,
+    parseCNYMicros, fmtDate, formatCNY, formatFen, formatCount,
+    copyValue, t, onChange, api, errorOf, messageOf, notice, clearNotice,
+    renderNotice, fetchMe
+  } = shared;
   const STATUSES = ["draft", "published", "offline"];
 
-  // ---------------------------------------------------------------- helpers
-  const byId = (id) => document.getElementById(id);
-  function h(tag, cls, text) {
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (text instanceof Node) n.append(text);
-    else if (text != null) n.textContent = text;
-    return n;
-  }
-  function clear(node) {
-    while (node.firstChild) node.removeChild(node.firstChild);
-  }
-  function show(node, on) {
-    if (!node) return;
-    if (on) node.removeAttribute("hidden");
-    else node.setAttribute("hidden", "");
-  }
-  function setPipeText(node, value) {
-    node.textContent = value == null ? "" : String(value);
-  }
-  function setFormError(node, message) {
-    if (message) {
-      node.textContent = message;
-      show(node, true);
-    } else {
-      node.textContent = "";
-      show(node, false);
-    }
-  }
-  function slugify(value) {
-    return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  }
-  function isHttpURL(value) {
-    try {
-      const u = new URL(value);
-      return u.protocol === "http:" || u.protocol === "https:";
-    } catch (e) {
-      return false;
-    }
-  }
-  function readModels(value) {
-    const out = [];
-    const seen = new Set();
-    for (const raw of String(value || "").split(/[,\n]+/)) {
-      const m = raw.trim();
-      if (!m || seen.has(m.toLowerCase())) continue;
-      seen.add(m.toLowerCase());
-      out.push(m);
-    }
-    return out;
-  }
-  function fmtDate(value) {
-    if (!value) return "";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "";
-    try {
-      return new Intl.DateTimeFormat(LOCALES[lang], { dateStyle: "medium" }).format(d);
-    } catch (e) {
-      return d.toISOString().slice(0, 10);
-    }
-  }
-  function formatCNY(micros, currency) {
-    const cur = typeof currency === "string" && /^[A-Za-z]{3}$/.test(currency) ? currency.toUpperCase() : "CNY";
-    const value = Number(micros) / 1e6;
-    if (!Number.isFinite(value)) return "";
-    try {
-      return new Intl.NumberFormat(LOCALES[lang], {
-        style: "currency",
-        currency: cur,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 6
-      }).format(value);
-    } catch (e) {
-      return value.toFixed(2) + " " + cur;
-    }
-  }
-  function formatFen(fen, currency) {
-    return formatCNY(Number(fen) * 10000, currency);
-  }
-  function formatCount(n) {
-    const value = Number(n);
-    if (!Number.isFinite(value)) return "0";
-    try {
-      return new Intl.NumberFormat(LOCALES[lang], { maximumFractionDigits: 0 }).format(value);
-    } catch (e) {
-      return String(value);
-    }
-  }
-  function newRequestID() {
-    try {
-      return crypto.randomUUID();
-    } catch (e) {
-      return "admin-" + Date.now().toString(36) + "-" + Math.random().toString(16).slice(2, 12);
-    }
-  }
-  // parseCNYMicros reads a CNY amount with at most six decimals as the
-  // wallet's micro-CNY unit, without going through a float.
-  function parseCNYMicros(raw) {
-    const s = String(raw == null ? "" : raw).trim();
-    if (!s) return 0;
-    if (!/^\d+(?:\.\d{1,6})?$/.test(s)) return null;
-    const parts = s.split(".");
-    const micros = Number(parts[0]) * 1e6 + Number((parts[1] || "").padEnd(6, "0"));
-    return Number.isSafeInteger(micros) ? micros : null;
-  }
-  async function copyValue(value, codeNode) {
-    if (!value) return false;
-    try {
-      await navigator.clipboard.writeText(value);
-      return true;
-    } catch (e) {}
-    try {
-      const range = document.createRange();
-      range.selectNodeContents(codeNode || document.body);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-      const ok = document.execCommand("copy");
-      sel.removeAllRanges();
-      return ok;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // ---------------------------------------------------------------- language
-  let lang = detectLang();
-
-  function detectLang() {
-    let wanted = null;
-    try { wanted = new URLSearchParams(location.search).get("lang"); } catch (e) {}
-    if (wanted && LANGS.includes(wanted)) return wanted;
-    let saved = null;
-    try { saved = localStorage.getItem(LANG_KEY); } catch (e) {}
-    if (saved && LANGS.includes(saved)) return saved;
-    const tags = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""]);
-    for (const raw of tags) {
-      const tag = String(raw).toLowerCase();
-      if (tag === "zh-tw" || tag === "zh-hk" || tag === "zh-mo" || tag.startsWith("zh-hant")) return "zh-TW";
-      if (tag.startsWith("zh")) return "zh";
-      if (tag.startsWith("ja")) return "ja";
-      if (tag.startsWith("de")) return "de";
-      if (tag.startsWith("en")) return "en";
-    }
-    return "en";
-  }
-
-  function t(key, vars) {
-    const pack = DICT[lang] || DICT.en;
-    let s = pack[key];
-    if (s == null) s = DICT.en[key];
-    if (s == null) return key;
-    if (vars) s = s.replace(/\{(\w+)\}/g, (m, name) => (vars[name] != null ? String(vars[name]) : m));
-    return s;
-  }
-
-  function setLang(next, persist) {
-    if (!LANGS.includes(next)) return;
-    lang = next;
-    if (persist) {
-      try { localStorage.setItem(LANG_KEY, next); } catch (e) {}
-    }
-    applyStatic();
-  }
-
+  // The portal's own redraw after a language change: static strings are the
+  // shared layer's job, and the lists, forms and messages are this page's.
   function applyStatic() {
-    document.documentElement.lang = lang;
-    document.title = t("appTitle");
-    for (const node of document.querySelectorAll("[data-t]")) setPipeText(node, t(node.dataset.t));
-    for (const node of document.querySelectorAll("[data-tp]")) node.placeholder = t(node.dataset.tp);
-    for (const node of document.querySelectorAll("[data-tt]")) node.title = t(node.dataset.tt);
-    for (const node of document.querySelectorAll("[data-ta]")) node.setAttribute("aria-label", t(node.dataset.ta));
     // a message written in the language the reader just left would be
     // stale; the list states and the notice are kept as keys and redrawn
-    for (const id of ["authError", "authStatus", "payError", "pError", "keyError", "chError", "hpError", "groupError"]) {
+    for (const id of ["payError", "pError", "keyError", "chError", "hpError", "groupError", "policyError"]) {
       setFormError(byId(id), "");
     }
-    renderLangMenu();
-    renderAuthStep();
     renderHouseProviderTitle();
     renderSession();
     renderNotice();
+    renderBootState();
     renderAllLists();
   }
 
   // ---------------------------------------------------------------- state
   const S = {
     user: null,
-    email: "",
-    codeRequested: false,
+    boot: { phase: "loading", error: null },
     wallet: { phase: "idle", data: null, error: null },
     walletOrders: { phase: "idle", items: [], error: null },
     usage: { phase: "idle", items: [], error: null },
@@ -220,6 +47,7 @@
     orders: { phase: "idle", items: [], error: null },
     audit: { phase: "idle", items: [], error: null },
     adminProviders: { phase: "idle", items: [], error: null },
+    policy: { phase: "idle", data: null, error: null, saving: false },
     housePending: "",
     revoking: "",
     statusPending: "",
@@ -253,178 +81,31 @@
     adminProviderBusy: false
   };
 
-  let noticeState = null;
-  let noticeTimer = 0;
   let orderTimer = 0;
   // a read or a write that answers after the session changed is dropped:
   // its box belongs to the session that asked for it
   let generation = 0;
 
-  // ---------------------------------------------------------------- API
-  async function api(path, opts) {
-    const init = Object.assign({ method: "GET", credentials: "same-origin" }, opts || {});
-    init.headers = Object.assign({ "Accept": "application/json" }, init.headers || {});
-    if (init.body !== undefined) {
-      init.headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(init.body);
-    }
-    const res = await fetch(path, init);
-    let data = null;
-    let text = "";
-    try { text = await res.text(); } catch (e) { text = ""; }
-    if (text) {
-      try { data = JSON.parse(text); } catch (e) { data = null; }
-    }
-    return { res: res, data: data };
-  }
-
-  // errorOf names a safe, localized reason: never a server message, which
-  // could name an account, a database detail or a decrypted configuration.
-  function errorOf(res, data) {
-    const code = data && typeof data.error === "string" ? data.error.toLowerCase() : "";
-    if (code === "rate_limited" || (res && res.status === 429)) {
-      let n = data && Number(data.retryAfter);
-      if (!n && res && res.headers && res.headers.get) n = Number(res.headers.get("Retry-After"));
-      return n > 0 ? { key: "errRateLimitedIn", vars: { n: Math.ceil(n) } } : { key: "errRateLimited" };
-    }
-    const byCode = {
-      invalid_email: "errInvalidEmail",
-      invalid_code: "errInvalidCode",
-      account_disabled: "errAccountDisabled",
-      sign_in_failed: "errSignInFailed",
-      unauthenticated: "errSignIn",
-      forbidden: "errForbidden",
-      mail_failed: "errMailFailed",
-      invalid_request: "errInvalidRequest",
-      method_not_allowed: "errInvalidRequest",
-      unavailable: "errUnavailable",
-      not_found: "errNotFound"
-    };
-    if (byCode[code]) return { key: byCode[code] };
-    const status = res ? res.status : 0;
-    if (status === 401) return { key: "errSignIn" };
-    if (status === 403) return { key: "errForbidden" };
-    if (status === 404) return { key: "errNotFound" };
-    if (status === 400) return { key: "errInvalidRequest" };
-    if (status >= 500) return { key: "errUnavailable" };
-    return { key: "errRequest" };
-  }
-
-  function messageOf(reason) {
-    return reason ? t(reason.key, reason.vars) : "";
-  }
-
-  function notice(reason, tone) {
-    clearTimeout(noticeTimer);
-    noticeTimer = 0;
-    if (!reason) {
-      noticeState = null;
-      renderNotice();
-      return;
-    }
-    noticeState = { key: reason.key, vars: reason.vars, tone: tone || "ok" };
-    renderNotice();
-    // a passing outcome goes as the app's status line does; an error stays
-    // long enough to read and select
-    noticeTimer = setTimeout(() => {
-      noticeTimer = 0;
-      noticeState = null;
-      renderNotice();
-    }, tone === "error" ? 15000 : 9000);
-  }
-
-  function clearNotice() {
-    clearTimeout(noticeTimer);
-    noticeTimer = 0;
-    if (!noticeState) return;
-    noticeState = null;
-    renderNotice();
-  }
-
-  function renderNotice() {
-    const node = byId("notice");
-    if (!noticeState) {
-      node.textContent = "";
-      show(node, false);
-      return;
-    }
-    const error = noticeState.tone === "error";
-    node.textContent = messageOf(noticeState);
-    node.dataset.tone = error ? "error" : "ok";
-    node.setAttribute("role", error ? "alert" : "status");
-    node.setAttribute("aria-live", error ? "assertive" : "polite");
-    show(node, true);
-  }
-
-  function onSignedOut(messageKey) {
+  // A read that answers 401 means the session ended: the portal belongs to
+  // nobody now, so it goes to the sign-in page. Anything else is unknown and
+  // stays on this page as a safe reason.
+  function onSignedOut() {
     generation++;
     stopOrderPoll();
     S.user = null;
-    S.email = "";
-    S.codeRequested = false;
-    setAuthBusy(false);
-    S.keyBusy = false;
-    S.wallet = { phase: "idle", data: null, error: null };
-    S.providers = { phase: "idle", items: [], error: null };
-    S.houses = { phase: "idle", items: [], error: null };
-    S.keys = { phase: "idle", items: [], error: null };
-    S.admin = { phase: "idle", items: [], error: null };
-    S.walletOrders = { phase: "idle", items: [], error: null };
-    S.usage = { phase: "idle", items: [], error: null };
-    S.groups = { phase: "idle", items: [], error: null };
-    S.users = { phase: "idle", items: [], error: null };
-    S.orders = { phase: "idle", items: [], error: null };
-    S.audit = { phase: "idle", items: [], error: null };
-    S.adminProviders = { phase: "idle", items: [], error: null };
-    S.adminProvidersFor = "";
-    S.deletingProvider = "";
-    S.deletingGroup = "";
-    S.groupFormOpen = false;
-    S.creditFor = "";
-    S.housePending = "";
-    S.revoking = "";
-    S.statusPending = "";
-    S.keyChannelSel = new Set();
-    S.houseProviderFor = "";
-    S.presetId = "";
-    S.payProvider = "alipay";
-    S.payBusy = false;
-    S.order = null;
-    S.orderChecking = false;
-    S.orderCredited = false;
-    S.pricesFor = "";
-    S.prices = { phase: "idle", items: [], error: null };
-    S.priceFormOpen = false;
-    S.lastHouseProvider = null;
-    clearSecret();
-    clearNotice();
-    closeRechargeForm();
-    renderPayBox();
-    hideForms();
-    show(byId("portal"), false);
-    show(byId("signin"), true);
-    show(byId("session"), false);
-    show(byId("adminPanel"), false);
-    setFormError(byId("authError"), messageKey ? t(messageKey) : "");
-    setFormError(byId("authStatus"), "");
-    renderAuthStep();
+    clearSecret(false);
+    location.replace("/login");
   }
 
   function signedIn(user) {
     generation++;
     S.user = user;
-    S.email = (user && user.email) || S.email;
-    S.codeRequested = false;
-    byId("email").value = S.email;
-    byId("code").value = "";
+    S.boot = { phase: "ready", error: null };
     clearNotice();
-    setFormError(byId("authError"), "");
-    setFormError(byId("authStatus"), "");
-    show(byId("signin"), false);
+    show(byId("bootState"), false);
     show(byId("portal"), true);
     show(byId("session"), true);
     renderSession();
-    renderAuthStep();
     loadAll();
   }
 
@@ -444,88 +125,7 @@
     show(byId("usersPanel"), isAdmin());
     show(byId("ordersPanel"), isAdmin());
     show(byId("auditPanel"), isAdmin());
-  }
-
-  // ---------------------------------------------------------------- auth flow
-  let authBusy = false;
-
-  function setAuthBusy(on, action) {
-    authBusy = on;
-    byId("authGo").disabled = on;
-    byId("resend").disabled = on;
-    byId("email").disabled = on;
-    byId("code").disabled = on;
-    byId("authGo").textContent = t(on ? (action === "login" ? "signingIn" : "sending") : (S.codeRequested ? "signIn" : "sendCode"));
-    byId("authGo").setAttribute("aria-busy", on ? "true" : "false");
-  }
-
-  function renderAuthStep() {
-    const code = S.codeRequested;
-    show(byId("codeGroup"), code);
-    show(byId("resend"), code);
-    show(byId("changeEmail"), code);
-    byId("authGo").textContent = t(code ? "signIn" : "sendCode");
-    byId("authGo").setAttribute("aria-busy", authBusy ? "true" : "false");
-  }
-
-  async function requestCode() {
-    const email = byId("email").value.trim();
-    if (!email || email.indexOf("@") < 1) {
-      setFormError(byId("authError"), t("errInvalidEmail"));
-      byId("email").focus({ preventScroll: true });
-      return false;
-    }
-    setFormError(byId("authError"), "");
-    setFormError(byId("authStatus"), "");
-    setAuthBusy(true, "code");
-    let ok = false;
-    try {
-      const { res, data } = await api("/api/auth/code", { method: "POST", body: { email: email } });
-      if (res.ok) {
-        S.email = email;
-        S.codeRequested = true;
-        byId("code").value = "";
-        setFormError(byId("authStatus"), t("codeSent"));
-        ok = true;
-      } else {
-        setFormError(byId("authError"), messageOf(errorOf(res, data)));
-      }
-    } catch (e) {
-      setFormError(byId("authError"), t("errUnavailable"));
-    }
-    setAuthBusy(false);
-    renderAuthStep();
-    if (ok) byId("code").focus({ preventScroll: true });
-    return ok;
-  }
-
-  async function submitCode() {
-    const email = (S.email || byId("email").value).trim();
-    const code = byId("code").value.trim();
-    if (!code) {
-      setFormError(byId("authError"), t("errCodeRequired"));
-      byId("code").focus({ preventScroll: true });
-      return false;
-    }
-    setFormError(byId("authError"), "");
-    setAuthBusy(true, "login");
-    let ok = false;
-    try {
-      const { res, data } = await api("/api/auth/login", { method: "POST", body: { email: email, code: code } });
-      if (res.ok && data && data.user) {
-        byId("code").value = "";
-        signedIn(data.user);
-        ok = true;
-      } else if (res.ok) {
-        setFormError(byId("authError"), t("errRequest"));
-      } else {
-        setFormError(byId("authError"), messageOf(errorOf(res, data)));
-      }
-    } catch (e) {
-      setFormError(byId("authError"), t("errUnavailable"));
-    }
-    setAuthBusy(false);
-    return ok;
+    show(byId("policyPanel"), isAdmin());
   }
 
   async function logout() {
@@ -536,29 +136,64 @@
     try {
       const { res, data } = await api("/api/auth/logout", { method: "POST" });
       if (res.ok || res.status === 401) {
-        onSignedOut("");
-      } else {
-        notice(errorOf(res, data), "error");
+        generation++;
+        stopOrderPoll();
+        clearSecret(false);
+        location.replace("/login");
+        return;
       }
+      notice(errorOf(res, data), "error");
     } catch (e) {
       notice({ key: "errUnavailable" }, "error");
     }
     button.disabled = false;
   }
 
-  async function boot() {
-    applyStatic();
-    hideForms();
-    try {
-      const { res, data } = await api("/api/auth/me");
-      if (res.ok && data && data.user) {
-        signedIn(data.user);
-        return;
-      }
-      if (res.status !== 401) setFormError(byId("authError"), messageOf(errorOf(res, data)));
-    } catch (e) {
-      setFormError(byId("authError"), t("errUnavailable"));
+  // ---------------------------------------------------------------- boot
+  // Only a 401 sends the reader to the sign-in page. A failed read is
+  // unknown: it says so on this page with a Retry, and never pretends the
+  // reader is signed out.
+  function renderBootState() {
+    const node = byId("bootState");
+    if (!node) return;
+    const box = S.boot;
+    clear(node);
+    node.className = "state boot";
+    if (box.phase === "ready") {
+      show(node, false);
+      return;
     }
+    show(node, true);
+    if (box.phase === "loading") {
+      node.append(h("span", "spinner"), h("span", "state-text", t("checkingSession")));
+      return;
+    }
+    node.className = "state boot error";
+    node.append(h("span", "state-text", messageOf(box.error) || t("errSession")));
+    const retry = h("button", "btn small", t("retry"));
+    retry.type = "button";
+    retry.addEventListener("click", boot);
+    const signIn = h("a", "btn small ghost", t("signIn"));
+    signIn.href = "/login";
+    node.append(retry, signIn);
+  }
+
+  async function boot() {
+    hideForms();
+    show(byId("portal"), false);
+    S.boot = { phase: "loading", error: null };
+    renderBootState();
+    const me = await fetchMe();
+    if (me.state === "in") {
+      signedIn(me.user);
+      return;
+    }
+    if (me.state === "out") {
+      location.replace("/login");
+      return;
+    }
+    S.boot = { phase: "error", error: me.reason };
+    renderBootState();
   }
 
   // ---------------------------------------------------------------- lists
@@ -566,7 +201,7 @@
     if (!S.user) return;
     const gen = generation;
     const tasks = [loadWallet(gen), loadWalletOrders(gen), loadUsage(gen), loadProviders(gen), loadHouses(gen), loadKeys(gen), loadGroups(gen)];
-    if (isAdmin()) tasks.push(loadAdmin(gen), loadUsers(gen), loadOrders(gen), loadAudit(gen));
+    if (isAdmin()) tasks.push(loadAdmin(gen), loadUsers(gen), loadOrders(gen), loadAudit(gen), loadPolicy(gen));
     await Promise.all(tasks);
   }
 
@@ -1050,6 +685,7 @@
     renderUsers();
     renderOrders();
     renderAudit();
+    renderPolicy();
     renderPayBox();
   }
 
@@ -1656,6 +1292,217 @@
       if (gen === generation) setFormError(errorNode, t("errUnavailable"));
     } finally {
       save.disabled = false;
+    }
+  }
+
+  // ------------------------------------------------------- auth policy
+  // The administrator's four switches. Every read is validated as a whole;
+  // a write carries the version it was read at, so two administrators
+  // cannot silently overwrite each other.
+  function readAdminPolicy(data) {
+    if (!data || typeof data !== "object") return null;
+    if (typeof data.registrationEnabled !== "boolean") return null;
+    if (typeof data.passwordLoginEnabled !== "boolean") return null;
+    if (typeof data.codeLoginEnabled !== "boolean") return null;
+    const min = Number(data.passwordMinLength);
+    if (!Number.isInteger(min) || min < 8 || min > 72) return null;
+    const version = Number(data.version);
+    if (!Number.isInteger(version) || version < 0) return null;
+    const users = Number(data.usersWithoutPassword);
+    if (!Number.isInteger(users) || users < 0) return null;
+    if (typeof data.mailReady !== "boolean") return null;
+    return {
+      registrationEnabled: data.registrationEnabled,
+      passwordLoginEnabled: data.passwordLoginEnabled,
+      codeLoginEnabled: data.codeLoginEnabled,
+      passwordMinLength: min,
+      version: version,
+      usersWithoutPassword: users,
+      mailReady: data.mailReady
+    };
+  }
+
+  function loadPolicy(gen = generation) {
+    if (!isAdmin() || gen !== generation) return Promise.resolve();
+    S.policy.phase = "loading";
+    S.policy.error = null;
+    renderPolicy();
+    return api("/api/cloud/admin/auth-policy").then(({ res, data }) => {
+      if (gen !== generation) return;
+      if (res.status === 401) {
+        onSignedOut();
+        return;
+      }
+      if (!res.ok) {
+        S.policy.phase = "error";
+        S.policy.error = errorOf(res, data);
+      } else {
+        const read = readAdminPolicy(data);
+        if (!read) {
+          S.policy.phase = "error";
+          S.policy.error = { key: "errLoadPolicy" };
+        } else {
+          S.policy.data = read;
+          S.policy.phase = "ready";
+          S.policy.error = null;
+        }
+      }
+      renderPolicy();
+    }, () => {
+      if (gen !== generation) return;
+      S.policy.phase = "error";
+      S.policy.error = { key: "errUnavailable" };
+      renderPolicy();
+    });
+  }
+
+  function policySwitch(id) {
+    return byId(id);
+  }
+
+  function policyDraft() {
+    return {
+      registrationEnabled: policySwitch("policyRegistration").getAttribute("aria-checked") === "true",
+      passwordLoginEnabled: policySwitch("policyPassword").getAttribute("aria-checked") === "true",
+      codeLoginEnabled: policySwitch("policyCode").getAttribute("aria-checked") === "true",
+      passwordMinLength: Number(byId("policyMinLength").value)
+    };
+  }
+
+  function renderPolicyFacts() {
+    const data = S.policy.data;
+    if (!data) return;
+    const draft = policyDraft();
+    setPipeText(byId("policyUsersNoPassword"), t("policyNoPasswordUsers", { n: formatCount(data.usersWithoutPassword) }));
+    const mail = byId("policyMail");
+    mail.textContent = t(data.mailReady ? "policyMailReady" : "policyMailMissing");
+    mail.className = "pill " + (data.mailReady ? "ok" : "warn");
+    const warn = byId("policyWarning");
+    if (!draft.codeLoginEnabled && data.usersWithoutPassword > 0) {
+      setPipeText(warn, t("policyCodeOffWarning", { n: formatCount(data.usersWithoutPassword) }));
+      show(warn, true);
+    } else {
+      setPipeText(warn, "");
+      show(warn, false);
+    }
+    setPipeText(byId("policyVersion"), t("policyVersion", { n: formatCount(data.version) }));
+  }
+
+  function populatePolicy(data) {
+    for (const [id, on] of [
+      ["policyRegistration", data.registrationEnabled],
+      ["policyPassword", data.passwordLoginEnabled],
+      ["policyCode", data.codeLoginEnabled]
+    ]) {
+      policySwitch(id).setAttribute("aria-checked", on ? "true" : "false");
+    }
+    byId("policyMinLength").value = String(data.passwordMinLength);
+    setFormError(byId("policyError"), "");
+  }
+
+  function renderPolicy() {
+    const panel = byId("policyPanel");
+    if (!isAdmin()) {
+      show(panel, false);
+      return;
+    }
+    show(panel, true);
+    const box = S.policy;
+    const state = byId("policyState");
+    clear(state);
+    state.className = "state";
+    show(byId("policyForm"), box.phase === "ready");
+    show(byId("policyVersion"), box.phase === "ready");
+    if (box.phase === "loading") {
+      show(state, true);
+      state.append(h("span", "spinner"), h("span", "state-text", t("loading")));
+      return;
+    }
+    if (box.phase === "error") {
+      show(state, true);
+      state.className = "state error";
+      state.append(h("span", "state-text", messageOf(box.error) || t("errLoadPolicy")));
+      const retry = h("button", "btn small", t("retry"));
+      retry.type = "button";
+      retry.addEventListener("click", () => loadPolicy());
+      state.append(retry);
+      return;
+    }
+    show(state, false);
+    if (box.phase !== "ready") return;
+    if (box.shownFor !== box.data) {
+      box.shownFor = box.data;
+      populatePolicy(box.data);
+    }
+    renderPolicyFacts();
+  }
+
+  function togglePolicySwitch(id) {
+    const button = policySwitch(id);
+    if (!button || S.policy.saving) return;
+    button.setAttribute("aria-checked", button.getAttribute("aria-checked") === "true" ? "false" : "true");
+    setFormError(byId("policyError"), "");
+    renderPolicyFacts();
+  }
+
+  async function savePolicy() {
+    const data = S.policy.data;
+    if (!data || S.policy.saving) return;
+    const draft = policyDraft();
+    if (!Number.isInteger(draft.passwordMinLength) || draft.passwordMinLength < 8 || draft.passwordMinLength > 72) {
+      setFormError(byId("policyError"), t("errPolicyMinLength"));
+      byId("policyMinLength").focus({ preventScroll: true });
+      return;
+    }
+    if (!draft.passwordLoginEnabled && !draft.codeLoginEnabled) {
+      setFormError(byId("policyError"), t("policyAtLeastOne"));
+      return;
+    }
+    const gen = generation;
+    S.policy.saving = true;
+    byId("policySave").disabled = true;
+    clearNotice();
+    try {
+      const { res, data: reply } = await api("/api/cloud/admin/auth-policy", {
+        method: "PUT",
+        body: {
+          registrationEnabled: draft.registrationEnabled,
+          passwordLoginEnabled: draft.passwordLoginEnabled,
+          codeLoginEnabled: draft.codeLoginEnabled,
+          passwordMinLength: draft.passwordMinLength,
+          version: data.version
+        }
+      });
+      if (gen !== generation) return;
+      if (res.status === 401) {
+        onSignedOut();
+        return;
+      }
+      if (res.status === 409) {
+        // the read that comes with the answer is newer than the draft; the
+        // reader sees why their save did not land after it is drawn
+        await loadPolicy();
+        setFormError(byId("policyError"), t("errPolicyConflict"));
+        return;
+      }
+      if (!res.ok) {
+        setFormError(byId("policyError"), messageOf(errorOf(res, reply)));
+        return;
+      }
+      const read = readAdminPolicy(reply);
+      if (read) {
+        S.policy.data = read;
+        S.policy.shownFor = null;
+      } else {
+        await loadPolicy();
+      }
+      notice({ key: "policySaved" }, "ok");
+    } catch (e) {
+      if (gen === generation) setFormError(byId("policyError"), t("errUnavailable"));
+    } finally {
+      S.policy.saving = false;
+      byId("policySave").disabled = false;
+      renderPolicy();
     }
   }
 
@@ -2351,24 +2198,6 @@
 
   // ---------------------------------------------------------------- wiring
   function wire() {
-    byId("signinForm").addEventListener("submit", (event) => {
-      event.preventDefault();
-      if (authBusy) return;
-      if (S.codeRequested) submitCode();
-      else requestCode();
-    });
-    byId("resend").addEventListener("click", () => {
-      if (!authBusy) requestCode();
-    });
-    byId("changeEmail").addEventListener("click", () => {
-      if (authBusy) return;
-      S.codeRequested = false;
-      byId("code").value = "";
-      setFormError(byId("authError"), "");
-      setFormError(byId("authStatus"), "");
-      renderAuthStep();
-      byId("email").focus({ preventScroll: true });
-    });
     byId("logout").addEventListener("click", logout);
 
     byId("recharge").addEventListener("click", () => {
@@ -2459,25 +2288,12 @@
     });
     bindProtocol("hpProtocol", (protocol) => { S.hpProtocol = protocol; });
 
-    const langButton = byId("langBtn");
-    const langMenu = byId("langMenu");
-    langButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const open = langMenu.hidden;
-      show(langMenu, open);
-      langButton.setAttribute("aria-expanded", open ? "true" : "false");
-      if (open) {
-        const current = langMenu.querySelector('button[aria-checked="true"]');
-        (current || langMenu.querySelector("button")).focus({ preventScroll: true });
-      }
-    });
-    langMenu.addEventListener("click", (event) => event.stopPropagation());
-    document.addEventListener("click", () => closeLangMenu());
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !langMenu.hidden) {
-        closeLangMenu();
-        langButton.focus({ preventScroll: true });
-      }
+    for (const id of ["policyRegistration", "policyPassword", "policyCode"]) {
+      byId(id).addEventListener("click", () => togglePolicySwitch(id));
+    }
+    byId("policyForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      savePolicy();
     });
 
     window.addEventListener("pagehide", () => {
@@ -2486,44 +2302,15 @@
     });
   }
 
-  function closeLangMenu() {
-    const menu = byId("langMenu");
-    if (menu.hidden) return;
-    show(menu, false);
-    byId("langBtn").setAttribute("aria-expanded", "false");
-  }
-
-  function renderLangMenu() {
-    const menu = byId("langMenu");
-    clear(menu);
-    for (const code of LANGS) {
-      const button = h("button", "", LANG_NAMES[code]);
-      button.type = "button";
-      button.setAttribute("role", "menuitemradio");
-      button.setAttribute("aria-checked", code === lang ? "true" : "false");
-      const mark = h("span", "mark", code === lang ? "✓" : "");
-      mark.setAttribute("aria-hidden", "true");
-      button.prepend(mark);
-      button.addEventListener("click", () => {
-        closeLangMenu();
-        setLang(code, true);
-      });
-      menu.append(button);
-    }
-    byId("langNow").textContent = LANG_NAMES[lang];
-    byId("langBtn").setAttribute("aria-label", t("langLabel") + ": " + LANG_NAMES[lang]);
-    menu.setAttribute("aria-label", t("langLabel"));
-  }
-
   // Exposed for this page's tests: the dictionary they check for missing
-  // keys and placeholders, and the language the page picked. It holds no
-  // credential and changes no behavior.
-  window.magpieCloud = {
-    langs: LANGS,
-    dicts: DICT,
-    lang: () => lang
-  };
+  // keys and placeholders, the language the page picked and the session it
+  // read. It holds no credential and changes no behavior.
+  window.magpieCloud.session = () => S.user;
+  window.magpieCloud.boot = () => S.boot;
+  window.magpieCloud.policy = () => S.policy;
 
+  onChange(applyStatic);
+  applyStatic();
   wire();
   boot();
 })();

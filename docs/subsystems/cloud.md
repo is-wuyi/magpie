@@ -28,6 +28,33 @@ SMTP and payment secrets come only from deployment configuration.
 `store.json` files and local account discovery are not cloud fallbacks. A
 failed provider, identity, authorization or wallet read fails closed.
 
+## Registration, login and account policy
+
+Registration and login are separate operations. `POST /api/auth/register/code`
+issues a `register`-purpose code and `POST /api/auth/register` consumes it with
+a user-chosen password in the same transaction as account creation. Code login
+(`POST /api/auth/login`) only accepts an existing account; it never creates
+one. Password login (`POST /api/auth/password`) uses bcrypt cost 12 and a
+database-backed email/IP sliding-window throttle. Password reset uses its own
+`reset` purpose, lets the user choose the replacement, advances `auth_version`
+and revokes older sessions before issuing a fresh one.
+
+The single `auth_policy` row controls public registration, password login,
+code login and minimum password length (8–72 bytes, default 12). At least one
+login method must remain enabled. Administrators read and update it through
+`GET/PUT /api/cloud/admin/auth-policy`, with optimistic version checks and an
+audit entry. Secrets, SMTP credentials, administrator addresses and trusted
+proxy settings remain deployment environment values. `GET /api/auth/policy`
+exposes only the switches needed to render the correct public forms.
+
+The public landing page is at `/` and `/cloud/`; `/login`, `/register` and
+`/reset` are separate authentication pages, and `/app` is the authenticated
+console. Signed-in readers are redirected from auth pages to `/app`, anonymous
+readers from `/app` to `/login`. HTML uses `Cache-Control: no-store` and the
+same CSP as the landing page. The portal sources are under
+`internal/gui/assets/cloud`: shared helpers, landing/auth controllers, the
+existing console controller and five-language dictionaries.
+
 ## Request and authorization path
 
 `startCloudWeb` opens and migrates the store, installs the provider loader,

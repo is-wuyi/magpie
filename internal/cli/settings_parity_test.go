@@ -280,6 +280,8 @@ var notYet = map[string]string{
 	"GET /api/cloud/groups":                           W,  // cloud_groups_http.go
 	"POST /api/cloud/groups":                          W,  // cloud_groups_http.go
 	"DELETE /api/cloud/groups/{id}":                   W,  // cloud_groups_http.go
+	"GET /api/cloud/admin/auth-policy":                W,  // cloud_auth_policy_http.go: account registration and login policy
+	"PUT /api/cloud/admin/auth-policy":                W,  // cloud_auth_policy_http.go
 	"GET /api/cloud/admin/users":                      W,  // cloud_admin_http.go
 	"POST /api/cloud/admin/users/{id}/status":         W,  // cloud_admin_http.go
 	"POST /api/cloud/admin/wallet/credit":             W,  // cloud_admin_http.go

@@ -44,6 +44,14 @@ var (
 	// ErrUnavailable means storage failed. Callers should fail closed and
 	// answer a generic error, not sign the request in.
 	ErrUnavailable = errors.New("auth: sign-in storage is unavailable")
+
+	ErrRegistrationDisabled  = errors.New("auth: registration is disabled")
+	ErrPasswordLoginDisabled = errors.New("auth: password login is disabled")
+	ErrCodeLoginDisabled     = errors.New("auth: email-code login is disabled")
+	ErrInvalidCredentials    = errors.New("auth: invalid credentials")
+	ErrInvalidPassword       = errors.New("auth: password does not meet the policy")
+	ErrEmailTaken            = errors.New("auth: email is already registered")
+	ErrPolicyConflict        = errors.New("auth: policy changed while being edited")
 )
 
 // RateLimitError carries how long a caller should wait. It unwraps to

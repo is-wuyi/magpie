@@ -26,10 +26,11 @@ const (
 	maxTokenLength = 256
 )
 
-// PurposeLogin is the only purpose this package issues today. Codes are
-// scoped by purpose in storage, so a code made for another purpose can never
-// satisfy a login.
-const PurposeLogin = DefaultLoginPurpose
+const (
+	PurposeLogin    = DefaultLoginPurpose
+	PurposeRegister = "register"
+	PurposeReset    = "reset"
+)
 
 // CodeRequest asks for a sign-in code. IP is the caller's address, used for
 // the per-IP throttle; an empty value drops that dimension.
@@ -38,9 +39,9 @@ type CodeRequest struct {
 	IP    string
 }
 
-// CodeSent is the generic answer to a code request. It never says whether
-// the address is already registered: every address can receive a code, and
-// the same answer is returned either way.
+// CodeSent is the generic answer to a code request. It never says whether the
+// address is already registered: every address can receive a code, and the
+// same answer is returned either way.
 type CodeSent struct {
 	RetryAfter time.Duration
 }
@@ -62,13 +63,60 @@ type LoginResult struct {
 	ExpiresAt time.Time
 }
 
-// RequestLoginCode mails a fresh code. It checks the send throttle before
-// storing the code and invalidates the previous code for the address. The
-// code is never returned or logged.
+// PublicPolicy is the safe part of the account policy a page needs to choose
+// its forms. Secrets, mail configuration and administrator addresses are not
+// included.
+type PublicPolicy struct {
+	RegistrationEnabled  bool `json:"registrationEnabled"`
+	PasswordLoginEnabled bool `json:"passwordLoginEnabled"`
+	CodeLoginEnabled     bool `json:"codeLoginEnabled"`
+	PasswordMinLength    int  `json:"passwordMinLength"`
+}
+
+// PublicAuthPolicy returns the current policy for the landing and auth pages.
+func (s *Service) PublicAuthPolicy(ctx context.Context) (PublicPolicy, error) {
+	p, err := s.repo.AuthPolicy(ctx)
+	if err != nil {
+		return PublicPolicy{}, mapStoreError(err)
+	}
+	return PublicPolicy{
+		RegistrationEnabled:  p.RegistrationEnabled,
+		PasswordLoginEnabled: p.PasswordLoginEnabled,
+		CodeLoginEnabled:     p.CodeLoginEnabled,
+		PasswordMinLength:    p.PasswordMinLength,
+	}, nil
+}
+
+// RequestLoginCode mails a fresh code to an existing account. Registration is
+// deliberately a separate purpose and endpoint.
 func (s *Service) RequestLoginCode(ctx context.Context, req CodeRequest) (CodeSent, error) {
+	return s.requestCode(ctx, req, PurposeLogin)
+}
+
+func (s *Service) requestCode(ctx context.Context, req CodeRequest, purpose string) (CodeSent, error) {
 	email, err := NormalizeEmail(req.Email)
 	if err != nil {
 		return CodeSent{}, err
+	}
+	policy, err := s.repo.AuthPolicy(ctx)
+	if err != nil {
+		return CodeSent{}, mapStoreError(err)
+	}
+	switch purpose {
+	case PurposeLogin:
+		if !policy.CodeLoginEnabled {
+			return CodeSent{}, ErrCodeLoginDisabled
+		}
+	case PurposeRegister:
+		if !policy.RegistrationEnabled {
+			return CodeSent{}, ErrRegistrationDisabled
+		}
+	case PurposeReset:
+		if !policy.PasswordLoginEnabled {
+			return CodeSent{}, ErrPasswordLoginDisabled
+		}
+	default:
+		return CodeSent{}, fmt.Errorf("%w: unknown code purpose", ErrUnavailable)
 	}
 	now := s.now()
 	code, err := randomLoginCode()
@@ -77,8 +125,8 @@ func (s *Service) RequestLoginCode(ctx context.Context, req CodeRequest) (CodeSe
 	}
 	rec, err := s.repo.IssueEmailCode(ctx, store.IssueEmailCodeParams{
 		EmailNormalized:  email,
-		Purpose:          PurposeLogin,
-		CodeHash:         s.hashLoginCode(PurposeLogin, email, code),
+		Purpose:          purpose,
+		CodeHash:         s.hashLoginCode(purpose, email, code),
 		HashVersion:      codeHashVersion,
 		MaxAttempts:      int16(s.cfg.CodeMaxAttempts),
 		Now:              now,
@@ -92,12 +140,7 @@ func (s *Service) RequestLoginCode(ctx context.Context, req CodeRequest) (CodeSe
 	if err != nil {
 		return CodeSent{}, mapStoreError(err)
 	}
-	msg := LoginCodeMessage{
-		To:        email,
-		Code:      code,
-		Purpose:   PurposeLogin,
-		ExpiresAt: rec.ExpiresAt,
-	}
+	msg := LoginCodeMessage{To: email, Code: code, Purpose: purpose, ExpiresAt: rec.ExpiresAt}
 	if err := s.mailer.SendLoginCode(ctx, msg); err != nil {
 		// A code nobody received must not stay usable. The delete is best
 		// effort: a storage failure here is reported with the mail failure,
@@ -111,67 +154,96 @@ func (s *Service) RequestLoginCode(ctx context.Context, req CodeRequest) (CodeSe
 	return CodeSent{RetryAfter: s.cfg.SendInterval}, nil
 }
 
-// VerifyLoginCode checks a code and creates a session. The user is created
-// as an ordinary user on the first successful verification; Promotion to
-// admin happens here, after the address was proven, and only for an address
-// in Config.AdminEmails.
+// VerifyLoginCode checks a code and signs in an existing account. It never
+// creates an account; registration has its own purpose and endpoint.
 func (s *Service) VerifyLoginCode(ctx context.Context, req LoginRequest) (LoginResult, error) {
 	email, err := NormalizeEmail(req.Email)
 	if err != nil {
 		return LoginResult{}, err
 	}
-	code := strings.TrimSpace(req.Code)
-	if !isSixDigits(code) {
+	policy, err := s.repo.AuthPolicy(ctx)
+	if err != nil {
+		return LoginResult{}, mapStoreError(err)
+	}
+	if !policy.CodeLoginEnabled {
+		return LoginResult{}, ErrCodeLoginDisabled
+	}
+	if _, err := s.verifyEmailCode(ctx, email, PurposeLogin, req.Code, req.IP); err != nil {
+		return LoginResult{}, err
+	}
+	credentials, err := s.repo.CredentialsByEmail(ctx, email)
+	if errors.Is(err, store.ErrNotFound) {
 		return LoginResult{}, ErrInvalidCode
+	}
+	if err != nil {
+		return LoginResult{}, mapStoreError(err)
+	}
+	if credentials.User.Status != store.StatusActive {
+		return LoginResult{}, ErrAccountDisabled
+	}
+	return s.completeLogin(ctx, credentials.User, req)
+}
+
+// verifyEmailCode consumes a code only after its purpose, address and digest
+// all match. Failure throttles are shared across all three purposes.
+func (s *Service) verifyEmailCode(ctx context.Context, email, purpose, rawCode, requestIP string) (store.EmailCode, error) {
+	rec, expected, err := s.checkEmailCode(ctx, email, purpose, rawCode, requestIP)
+	if err != nil {
+		return store.EmailCode{}, err
+	}
+	if err := s.repo.ConsumeEmailCode(ctx, rec.ID, expected, s.now()); err != nil {
+		if errors.Is(err, store.ErrCodeUnavailable) {
+			return store.EmailCode{}, ErrInvalidCode
+		}
+		return store.EmailCode{}, mapStoreError(err)
+	}
+	return rec, nil
+}
+
+// checkEmailCode verifies without consuming. Registration and reset consume
+// in the same database transaction as the account change, not before it.
+func (s *Service) checkEmailCode(ctx context.Context, email, purpose, rawCode, requestIP string) (store.EmailCode, []byte, error) {
+	code := strings.TrimSpace(rawCode)
+	if !isSixDigits(code) {
+		return store.EmailCode{}, nil, ErrInvalidCode
 	}
 	now := s.now()
-	ip := canonicalIP(req.IP)
-
+	ip := canonicalIP(requestIP)
 	counts, err := s.repo.EmailCodeFailureCounts(ctx, email, ip, now.Add(-throttleWindow))
 	if err != nil {
-		return LoginResult{}, mapStoreError(err)
+		return store.EmailCode{}, nil, mapStoreError(err)
 	}
 	if s.cfg.VerifyFailuresPerHour > 0 && counts.ByEmail >= s.cfg.VerifyFailuresPerHour {
-		return LoginResult{}, &RateLimitError{RetryAfter: throttleWindow}
+		return store.EmailCode{}, nil, &RateLimitError{RetryAfter: throttleWindow}
 	}
 	if ip != "" && s.cfg.VerifyFailuresPerIPPerHour > 0 && counts.ByIP >= s.cfg.VerifyFailuresPerIPPerHour {
-		return LoginResult{}, &RateLimitError{RetryAfter: throttleWindow}
+		return store.EmailCode{}, nil, &RateLimitError{RetryAfter: throttleWindow}
 	}
-
-	rec, err := s.repo.LatestActiveEmailCode(ctx, email, PurposeLogin, now)
+	rec, err := s.repo.LatestActiveEmailCode(ctx, email, purpose, now)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return LoginResult{}, ErrInvalidCode
+			return store.EmailCode{}, nil, ErrInvalidCode
 		}
-		return LoginResult{}, mapStoreError(err)
+		return store.EmailCode{}, nil, mapStoreError(err)
 	}
-	expected := s.hashLoginCode(PurposeLogin, email, code)
+	expected := s.hashLoginCode(purpose, email, code)
 	if !hmac.Equal(expected, rec.CodeHash) {
 		if _, err := s.repo.RecordEmailCodeFailure(ctx, rec.ID, now); err != nil && !errors.Is(err, store.ErrCodeUnavailable) {
-			return LoginResult{}, mapStoreError(err)
+			return store.EmailCode{}, nil, mapStoreError(err)
 		}
-		return LoginResult{}, ErrInvalidCode
+		return store.EmailCode{}, nil, ErrInvalidCode
 	}
-	if err := s.repo.ConsumeEmailCode(ctx, rec.ID, expected, now); err != nil {
-		if errors.Is(err, store.ErrCodeUnavailable) {
-			return LoginResult{}, ErrInvalidCode
-		}
-		return LoginResult{}, mapStoreError(err)
-	}
+	return rec, expected, nil
+}
 
-	user, err := s.repo.EnsureVerifiedUser(ctx, store.EnsureVerifiedUserParams{
-		Email:           email,
-		EmailNormalized: email,
-		VerifiedAt:      now,
-		PromoteAdmin:    s.isAdmin(email),
-	})
-	if err != nil {
-		if errors.Is(err, store.ErrUserDisabled) {
-			return LoginResult{}, ErrAccountDisabled
-		}
-		return LoginResult{}, mapStoreError(err)
+// completeLogin is the common session-issuing tail of every authentication
+// method. It always creates a fresh random token after the method has proved
+// the account, never before.
+func (s *Service) completeLogin(ctx context.Context, user store.User, req LoginRequest) (LoginResult, error) {
+	if user.Status != store.StatusActive || user.EmailVerifiedAt == nil {
+		return LoginResult{}, ErrSignInFailed
 	}
-
+	now := s.now()
 	token, err := randomSessionToken()
 	if err != nil {
 		return LoginResult{}, fmt.Errorf("%w: generate session: %v", ErrUnavailable, err)
@@ -183,8 +255,8 @@ func (s *Service) VerifyLoginCode(ctx context.Context, req LoginRequest) (LoginR
 		AuthVersion: user.AuthVersion,
 		Now:         now,
 		ExpiresAt:   expiresAt,
-		UserAgent:   req.UserAgent,
-		RequestIP:   ip,
+		UserAgent:   truncate(strings.ToValidUTF8(req.UserAgent, ""), maxUserAgentLength),
+		RequestIP:   canonicalIP(req.IP),
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrSessionStale) {
@@ -192,12 +264,7 @@ func (s *Service) VerifyLoginCode(ctx context.Context, req LoginRequest) (LoginR
 		}
 		return LoginResult{}, mapStoreError(err)
 	}
-	return LoginResult{
-		User:      user,
-		Session:   session,
-		Token:     token,
-		ExpiresAt: expiresAt,
-	}, nil
+	return LoginResult{User: user, Session: session, Token: token, ExpiresAt: expiresAt}, nil
 }
 
 // hashLoginCode binds the code to its purpose and address, so a digest
@@ -278,6 +345,12 @@ func mapStoreError(err error) error {
 	}
 	if errors.Is(err, store.ErrUserDisabled) {
 		return ErrAccountDisabled
+	}
+	if errors.Is(err, store.ErrEmailTaken) {
+		return ErrEmailTaken
+	}
+	if errors.Is(err, store.ErrPolicyConflict) {
+		return ErrPolicyConflict
 	}
 	if errors.Is(err, store.ErrNotFound) {
 		return ErrUnauthenticated

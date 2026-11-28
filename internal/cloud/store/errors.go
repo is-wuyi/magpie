@@ -45,6 +45,13 @@ var (
 	// window.
 	ErrRateLimited = errors.New("store: rate limited")
 
+	// ErrEmailTaken means a verified registration names an existing account.
+	ErrEmailTaken = errors.New("store: email is already registered")
+
+	// ErrPolicyConflict means an admin edited a policy after another admin
+	// had already changed the version they read.
+	ErrPolicyConflict = errors.New("store: authentication policy changed while it was being edited")
+
 	// ErrMigrationLocked means another process held the migration lock for
 	// longer than Config.MigrateLockTimeout.
 	ErrMigrationLocked = errors.New("store: the migration lock is held by another process")

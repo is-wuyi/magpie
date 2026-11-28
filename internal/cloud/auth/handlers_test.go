@@ -206,6 +206,11 @@ func TestAuthWritesRejectAnotherOrigin(t *testing.T) {
 	}{
 		{svc.ServeCode, RouteCode, `{"email":"x@example.com"}`},
 		{svc.ServeLogin, RouteLogin, `{"email":"x@example.com","code":"123456"}`},
+		{svc.ServeRegisterCode, RouteRegisterCode, `{"email":"x@example.com"}`},
+		{svc.ServeRegister, RouteRegister, `{"email":"x@example.com","code":"123456","password":"long-enough-password"}`},
+		{svc.ServePassword, RoutePassword, `{"email":"x@example.com","password":"long-enough-password"}`},
+		{svc.ServeResetCode, RouteResetCode, `{"email":"x@example.com"}`},
+		{svc.ServeReset, RouteReset, `{"email":"x@example.com","code":"123456","password":"long-enough-password"}`},
 		{svc.ServeLogout, RouteLogout, ``},
 	}
 	for _, route := range routes {
@@ -272,7 +277,7 @@ func TestRegisterRoutes(t *testing.T) {
 	svc := newTestService(t, repo, mail, nil)
 	mux := http.NewServeMux()
 	svc.RegisterRoutes(mux)
-	for _, path := range []string{RouteCode, RouteLogin, RouteLogout, RouteMe} {
+	for _, path := range []string{RouteCode, RouteLogin, RouteLogout, RouteMe, RoutePolicy, RouteRegisterCode, RouteRegister, RoutePassword, RouteResetCode, RouteReset} {
 		r := httptest.NewRequest(http.MethodGet, path, nil)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, r)

@@ -24,6 +24,13 @@ type Repository interface {
 	ConsumeEmailCode(ctx context.Context, id uuid.UUID, codeHash []byte, now time.Time) error
 	DeleteEmailCode(ctx context.Context, id uuid.UUID) error
 	EmailCodeFailureCounts(ctx context.Context, emailNormalized, requestIP string, since time.Time) (store.FailureCounts, error)
+	AuthPolicy(ctx context.Context) (store.AuthPolicy, error)
+	CreateRegisteredUser(ctx context.Context, p store.CreateRegisteredUserParams) (store.User, error)
+	CredentialsByEmail(ctx context.Context, emailNormalized string) (store.UserCredentials, error)
+	ResetPassword(ctx context.Context, p store.ResetPasswordParams) (store.User, error)
+	RecordAuthAttempt(ctx context.Context, emailNormalized, requestIP string, now time.Time) error
+	AuthFailureCounts(ctx context.Context, emailNormalized, requestIP string, since time.Time) (store.FailureCounts, error)
+	ClearAuthAttempts(ctx context.Context, emailNormalized string) error
 	EnsureVerifiedUser(ctx context.Context, p store.EnsureVerifiedUserParams) (store.User, error)
 	UserByID(ctx context.Context, id uuid.UUID) (store.User, error)
 	CreateSession(ctx context.Context, p store.CreateSessionParams) (store.Session, error)

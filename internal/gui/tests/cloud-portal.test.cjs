@@ -68,6 +68,15 @@ function seeded(user) {
     users: [{ id: user.id, email: user.email, role: user.role, status: "active", createdAt: user.createdAt, balanceMicros: 1000000, heldMicros: 0 }],
     audit: [],
     adminProviders: { [TEAM]: [provider(TEAM_PROVIDER, "Team relay")] },
+    policy: {
+      registrationEnabled: true,
+      passwordLoginEnabled: true,
+      codeLoginEnabled: true,
+      passwordMinLength: 12,
+      version: 3,
+      usersWithoutPassword: 1,
+      mailReady: true
+    },
     orders: {},
     nextOrder: 1,
     advanceOrder: false,
@@ -87,7 +96,8 @@ function seeded(user) {
 
 async function asset(route, pathname) {
   let rel = null;
-  if (pathname === "/" || pathname === "/cloud/" || pathname === "/cloud/index.html") rel = "index.html";
+  if (pathname === "/app" || pathname === "/cloud/portal.html") rel = "portal.html";
+  else if (pathname === "/" || pathname === "/cloud/" || pathname === "/cloud/index.html") rel = "index.html";
   else if (pathname.startsWith("/cloud/")) rel = pathname.slice("/cloud/".length);
   if (rel == null) return false;
   const file = path.join(ASSETS, rel);
@@ -252,6 +262,34 @@ async function open(browser, opts = {}) {
     }
     if (p === "/api/cloud/admin/orders" && method === "GET") return json(200, Object.values(db.orders));
     if (p === "/api/cloud/admin/audit" && method === "GET") return json(200, db.audit);
+    if (p === "/api/cloud/admin/auth-policy" && method === "GET") {
+      if (db.delay.policy) await new Promise((r) => setTimeout(r, db.delay.policy));
+      if (await maybeFail(route, db, "policy")) return;
+      return json(200, db.policy);
+    }
+    if (p === "/api/cloud/admin/auth-policy" && method === "PUT") {
+      if (await maybeFail(route, db, "savePolicy")) return;
+      if (!body || body.version !== db.policy.version) return json(409, { error: "version_conflict" });
+      for (const key of ["registrationEnabled", "passwordLoginEnabled", "codeLoginEnabled", "passwordMinLength"]) {
+        if (!(key in body)) return json(400, { error: "invalid_request" });
+        db.policy[key] = body[key];
+      }
+      db.policy.version++;
+      db.audit.unshift({
+        id: "audit-policy",
+        action: "auth.policy",
+        targetType: "deployment",
+        targetId: "auth-policy",
+        details: {
+          registrationEnabled: body.registrationEnabled,
+          passwordLoginEnabled: body.passwordLoginEnabled,
+          codeLoginEnabled: body.codeLoginEnabled,
+          passwordMinLength: body.passwordMinLength
+        },
+        createdAt: "2026-11-26T10:02:00Z"
+      });
+      return json(200, db.policy);
+    }
 
     if (p === "/api/cloud/providers" && method === "GET") {
       if (db.delay.providers) await new Promise((r) => setTimeout(r, db.delay.providers));
@@ -407,7 +445,7 @@ async function open(browser, opts = {}) {
     return route.fulfill({ status: 404, body: "" });
   });
 
-  await page.goto(BASE + "/?lang=en");
+  await page.goto(BASE + "/app?lang=en");
   return { context, page, db, errors };
 }
 
@@ -1103,6 +1141,58 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
       await page.locator(".providers-panel .row .danger").click();
       await page.locator(".providers-panel .row .danger").click();
       await page.locator(".providers-panel .state-title").filter({ hasText: "No providers in this channel yet" }).waitFor();
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test(`${engine}: an administrator edits the authentication policy at its read version`, async (t) => {
+    const browser = await launch(engine);
+    t.after(() => browser.close());
+    const { context, page, db, errors } = await open(browser, { user: ADMIN });
+    try {
+      await page.locator("#policyForm").waitFor();
+      assert.equal(await page.textContent("#policyPanel h2"), "Authentication policy");
+      assert.equal(await page.getAttribute("#policyRegistration", "aria-checked"), "true");
+      assert.equal(await page.getAttribute("#policyPassword", "aria-checked"), "true");
+      assert.equal(await page.getAttribute("#policyCode", "aria-checked"), "true");
+      assert.equal(await page.inputValue("#policyMinLength"), "12");
+      assert.equal(await page.textContent("#policyVersion"), "Version 3");
+      assert.match(await page.textContent("#policyUsersNoPassword"), /Users without a password: 1/);
+      assert.equal(await page.textContent("#policyMail"), "Email delivery is ready");
+
+      // the form never offers to turn off the last way in
+      await page.click("#policyCode");
+      assert.equal(await page.getAttribute("#policyCode", "aria-checked"), "false");
+      assert.match(await page.textContent("#policyWarning"), /1 users have no password/);
+      await page.click("#policyPassword");
+      await page.click("#policySave");
+      await page.locator("#policyError").waitFor();
+      assert.equal(await page.textContent("#policyError"), "Keep at least one sign-in method on.");
+      assert.equal(calls(db, "PUT", "/api/cloud/admin/auth-policy").length, 0);
+
+      await page.click("#policyPassword");
+      await page.fill("#policyMinLength", "10");
+      await page.click("#policySave");
+      await page.locator("#notice").filter({ hasText: "Authentication policy saved." }).waitFor();
+      const put = calls(db, "PUT", "/api/cloud/admin/auth-policy").pop();
+      assert.deepEqual(put.body, {
+        registrationEnabled: true,
+        passwordLoginEnabled: true,
+        codeLoginEnabled: false,
+        passwordMinLength: 10,
+        version: 3
+      });
+      assert.equal(await page.textContent("#policyVersion"), "Version 4");
+      assert.equal(await page.inputValue("#policyMinLength"), "10");
+
+      // a stale write says so and shows the policy as it now is
+      db.policy.version = 7;
+      await page.click("#policySave");
+      await page.locator("#policyError").filter({ hasText: "Someone else changed the policy" }).waitFor();
+      assert.equal(await page.textContent("#policyVersion"), "Version 7");
+      assert.equal(await page.inputValue("#policyMinLength"), "10");
       assert.deepEqual(errors, []);
     } finally {
       await context.close();

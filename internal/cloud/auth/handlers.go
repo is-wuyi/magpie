@@ -21,10 +21,16 @@ const (
 // Auth routes. They are not registered by this package anywhere: the caller
 // mounts them, so the GUI can decide when the cloud sign-in pages exist.
 const (
-	RouteCode   = "/api/auth/code"
-	RouteLogin  = "/api/auth/login"
-	RouteLogout = "/api/auth/logout"
-	RouteMe     = "/api/auth/me"
+	RouteCode         = "/api/auth/code"
+	RouteLogin        = "/api/auth/login"
+	RouteLogout       = "/api/auth/logout"
+	RouteMe           = "/api/auth/me"
+	RoutePolicy       = "/api/auth/policy"
+	RouteRegisterCode = "/api/auth/register/code"
+	RouteRegister     = "/api/auth/register"
+	RoutePassword     = "/api/auth/password"
+	RouteResetCode    = "/api/auth/reset/code"
+	RouteReset        = "/api/auth/reset"
 )
 
 // RegisterRoutes adds the four auth routes to mux. Nothing calls this
@@ -35,6 +41,12 @@ func (s *Service) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+RouteLogin, s.ServeLogin)
 	mux.HandleFunc("POST "+RouteLogout, s.ServeLogout)
 	mux.HandleFunc("GET "+RouteMe, s.ServeMe)
+	mux.HandleFunc("GET "+RoutePolicy, s.ServePolicy)
+	mux.HandleFunc("POST "+RouteRegisterCode, s.ServeRegisterCode)
+	mux.HandleFunc("POST "+RouteRegister, s.ServeRegister)
+	mux.HandleFunc("POST "+RoutePassword, s.ServePassword)
+	mux.HandleFunc("POST "+RouteResetCode, s.ServeResetCode)
+	mux.HandleFunc("POST "+RouteReset, s.ServeReset)
 }
 
 // Handler returns a mux holding only the auth routes, for a deployment that
@@ -137,11 +149,163 @@ func (s *Service) ServeLogin(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, r, err)
 		return
 	}
+	s.writeLoginResult(w, result)
+}
+
+func (s *Service) writeLoginResult(w http.ResponseWriter, result LoginResult) {
 	s.SetSessionCookie(w, result.Token, result.ExpiresAt)
 	writeJSONStatus(w, http.StatusOK, loginReply{
 		User:      replyUser(result.User),
 		ExpiresAt: result.ExpiresAt.UTC(),
 	})
+}
+
+// ServePolicy returns only the switches an authentication page needs.
+func (s *Service) ServePolicy(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	policy, err := s.PublicAuthPolicy(r.Context())
+	if err != nil {
+		writeAuthError(w, r, err)
+		return
+	}
+	writeJSONStatus(w, http.StatusOK, policy)
+}
+
+// ServeRegisterCode mails a registration-purpose code.
+func (s *Service) ServeRegisterCode(w http.ResponseWriter, r *http.Request) {
+	s.servePurposeCode(w, r, PurposeRegister)
+}
+
+// ServeResetCode mails a reset-purpose code without revealing the account.
+func (s *Service) ServeResetCode(w http.ResponseWriter, r *http.Request) {
+	s.servePurposeCode(w, r, PurposeReset)
+}
+
+func (s *Service) servePurposeCode(w http.ResponseWriter, r *http.Request, purpose string) {
+	noStore(w)
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+	if !s.sameOriginWrite(r) {
+		writeAuthError(w, r, ErrForbidden)
+		return
+	}
+	var body codeBody
+	if err := readAuthJSON(w, r, &body); err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, errorReply{Error: "invalid_request", Message: "The request is not valid."})
+		return
+	}
+	var sent CodeSent
+	var err error
+	if purpose == PurposeRegister {
+		sent, err = s.RequestRegisterCode(r.Context(), CodeRequest{Email: body.Email, IP: ClientIP(r, s.cfg.TrustProxyHeaders)})
+	} else {
+		sent, err = s.RequestResetCode(r.Context(), CodeRequest{Email: body.Email, IP: ClientIP(r, s.cfg.TrustProxyHeaders)})
+	}
+	if err != nil {
+		writeAuthError(w, r, err)
+		return
+	}
+	writeJSONStatus(w, http.StatusOK, codeReply{OK: true, RetryAfter: seconds(sent.RetryAfter)})
+}
+
+type registerBody struct {
+	Email    string `json:"email"`
+	Code     string `json:"code"`
+	Password string `json:"password"`
+}
+
+type passwordBody struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// ServeRegister creates an account after email verification and password
+// validation, then sets its first session cookie.
+func (s *Service) ServeRegister(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+	if !s.sameOriginWrite(r) {
+		writeAuthError(w, r, ErrForbidden)
+		return
+	}
+	var body registerBody
+	if err := readAuthJSON(w, r, &body); err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, errorReply{Error: "invalid_request", Message: "The request is not valid."})
+		return
+	}
+	result, err := s.Register(r.Context(), RegisterRequest{
+		Email: body.Email, Code: body.Code, Password: body.Password,
+		IP: ClientIP(r, s.cfg.TrustProxyHeaders), UserAgent: truncate(strings.ToValidUTF8(r.UserAgent(), ""), maxUserAgentLength),
+	})
+	if err != nil {
+		writeAuthError(w, r, err)
+		return
+	}
+	s.writeLoginResult(w, result)
+}
+
+// ServePassword signs an existing account in by password.
+func (s *Service) ServePassword(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+	if !s.sameOriginWrite(r) {
+		writeAuthError(w, r, ErrForbidden)
+		return
+	}
+	var body passwordBody
+	if err := readAuthJSON(w, r, &body); err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, errorReply{Error: "invalid_request", Message: "The request is not valid."})
+		return
+	}
+	result, err := s.PasswordLogin(r.Context(), PasswordLoginRequest{
+		Email: body.Email, Password: body.Password,
+		IP: ClientIP(r, s.cfg.TrustProxyHeaders), UserAgent: truncate(strings.ToValidUTF8(r.UserAgent(), ""), maxUserAgentLength),
+	})
+	if err != nil {
+		writeAuthError(w, r, err)
+		return
+	}
+	s.writeLoginResult(w, result)
+}
+
+// ServeReset consumes a reset code, sets a new password and revokes older
+// sessions before setting the fresh one.
+func (s *Service) ServeReset(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+	if !s.sameOriginWrite(r) {
+		writeAuthError(w, r, ErrForbidden)
+		return
+	}
+	var body registerBody
+	if err := readAuthJSON(w, r, &body); err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, errorReply{Error: "invalid_request", Message: "The request is not valid."})
+		return
+	}
+	result, err := s.ResetPassword(r.Context(), ResetPasswordRequest{
+		Email: body.Email, Code: body.Code, Password: body.Password,
+		IP: ClientIP(r, s.cfg.TrustProxyHeaders), UserAgent: truncate(strings.ToValidUTF8(r.UserAgent(), ""), maxUserAgentLength),
+	})
+	if err != nil {
+		writeAuthError(w, r, err)
+		return
+	}
+	s.writeLoginResult(w, result)
 }
 
 // ServeLogout handles POST /api/auth/logout. The cookie is cleared even when
@@ -240,6 +404,20 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 		writeJSONStatus(w, http.StatusUnauthorized, errorReply{Error: "invalid_code", Message: "That code is not valid or has expired."})
 	case errors.Is(err, ErrTooManyRequests):
 		writeJSONStatus(w, http.StatusTooManyRequests, errorReply{Error: "rate_limited", Message: "Too many requests. Try again later."})
+	case errors.Is(err, ErrRegistrationDisabled):
+		writeJSONStatus(w, http.StatusForbidden, errorReply{Error: "registration_disabled", Message: "Registration is currently disabled."})
+	case errors.Is(err, ErrPasswordLoginDisabled):
+		writeJSONStatus(w, http.StatusForbidden, errorReply{Error: "password_login_disabled", Message: "Password login is currently disabled."})
+	case errors.Is(err, ErrCodeLoginDisabled):
+		writeJSONStatus(w, http.StatusForbidden, errorReply{Error: "code_login_disabled", Message: "Email-code login is currently disabled."})
+	case errors.Is(err, ErrInvalidCredentials):
+		writeJSONStatus(w, http.StatusUnauthorized, errorReply{Error: "invalid_credentials", Message: "The email or password is not correct."})
+	case errors.Is(err, ErrInvalidPassword):
+		writeJSONStatus(w, http.StatusBadRequest, errorReply{Error: "invalid_password", Message: "The password does not meet the current policy."})
+	case errors.Is(err, ErrEmailTaken):
+		writeJSONStatus(w, http.StatusConflict, errorReply{Error: "email_taken", Message: "This email is already registered. Sign in instead."})
+	case errors.Is(err, ErrPolicyConflict):
+		writeJSONStatus(w, http.StatusConflict, errorReply{Error: "policy_conflict", Message: "The policy changed while it was being edited. Read it again and retry."})
 	case errors.Is(err, ErrAccountDisabled):
 		writeJSONStatus(w, http.StatusForbidden, errorReply{Error: "account_disabled", Message: "This account cannot sign in."})
 	case errors.Is(err, ErrSignInFailed):

@@ -6,22 +6,28 @@
 <!-- the handler sends this policy on the page it opens at /; the meta
      carries it on /cloud/ too, where the header is not set. Scripts and
      styles are files: nothing here is inline script. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'">
 <meta name="color-scheme" content="light dark">
 <meta name="referrer" content="same-origin">
+<meta name="description" content="magpie cloud — a multi-tenant relay for your own model keys.">
 <title>magpie cloud</title>
 <link rel="icon" href="/cloud/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/cloud/style.css">
+<link rel="stylesheet" href="/cloud/landing.css">
 </head>
-<body>
-<!-- The brand and the account bar, as the app's top bar: the product at the
-     left, the reader's language and account at the right. -->
+<body data-page="landing" data-title="landingPageTitle">
+<a class="skip" href="#main" data-t="skipToContent">Skip to content</a>
 <header class="top">
-  <div class="brand">
+  <a class="brand" href="/">
     <span class="logo" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><path fill="currentColor" d="M2.1 12.6c3.5.5 6.2-.4 8.1-2.8 1.5-1.9 2.4-3.3 4.1-4-1 .9-1.4 1.9-1.5 3.1 1.8-1.4 3.2-1.9 4.8-1.8-1.6.8-2.5 1.8-2.9 3.3-.9 3.6-3.5 5.6-7.9 6 2-.9 3.3-2.3 3.8-4-2.4 1.8-5.2 2.3-8.5 1.5z"/></svg></span>
     <span class="brand-name">magpie</span>
     <span class="brand-tag" data-t="brandCloud">cloud</span>
-  </div>
+  </a>
+  <nav class="land-nav" data-ta="landingNav" aria-label="Sections">
+    <a href="#features" data-t="navFeatures">Features</a>
+    <a href="#how" data-t="navHow">How it works</a>
+    <a href="#security" data-t="navSecurity">Security</a>
+  </nav>
   <div class="top-right">
     <div class="lang">
       <button type="button" class="lang-btn" id="langBtn" aria-haspopup="menu" aria-expanded="false">
@@ -30,385 +36,172 @@
       </button>
       <div class="menu" id="langMenu" role="menu" hidden></div>
     </div>
-    <div class="session" id="session" hidden>
-      <span class="session-email" id="meEmail"></span>
-      <span class="pill role" id="meRole"></span>
-      <button type="button" class="btn ghost small" id="logout" data-t="signOut">Sign out</button>
+    <div class="top-actions" id="navAuth">
+      <a class="btn ghost small" href="/login" data-t="navSignIn">Sign in</a>
+      <a class="btn primary small" href="/register" data-t="navCreateAccount">Create account</a>
     </div>
   </div>
 </header>
 
-<main class="shell">
+<main class="landing" id="main">
   <div class="notice" id="notice" role="status" aria-live="polite" hidden></div>
 
-  <!-- Sign in: an address, then the one-time code it is mailed. The page
-       never says whether the address has an account. -->
-  <section class="signin" id="signin">
-    <div class="hero">
-      <h1 data-t="signInTitle">Sign in to magpie cloud</h1>
-      <p class="hero-sub" data-t="signInIntro">Enter your email address and we will send you a one-time code. No password needed.</p>
-    </div>
-    <form class="auth-card" id="signinForm" novalidate>
-      <label class="field" for="email">
-        <span data-t="emailLabel">Email</span>
-        <input class="input" id="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" autocapitalize="off" data-tp="emailPlaceholder" required>
-      </label>
-      <div class="field" id="codeGroup" hidden>
-        <label class="field" for="code">
-          <span data-t="codeLabel">One-time code</span>
-          <input class="input mono" id="code" type="text" inputmode="numeric" autocomplete="one-time-code" spellcheck="false" autocapitalize="off" maxlength="64" data-tp="codePlaceholder">
-        </label>
-        <div class="auth-alt">
-          <button type="button" class="btn ghost small" id="resend" data-t="resend">Send again</button>
-          <button type="button" class="btn ghost small" id="changeEmail" data-t="changeEmail">Use another address</button>
-        </div>
+  <section class="hero-band" aria-labelledby="heroTitle">
+    <div class="hero-copy">
+      <p class="eyebrow" data-t="heroEyebrow">Multi-tenant key relay</p>
+      <h1 id="heroTitle" data-t="heroTitle">Your own model access, behind one endpoint.</h1>
+      <p class="hero-lead" data-t="heroLead">magpie cloud relays requests to the upstream keys you hold, speaks the OpenAI, Anthropic and Gemini protocols, and keeps every tenant's providers and keys apart.</p>
+      <div class="hero-cta" id="heroCta">
+        <a class="btn primary big" href="/register" data-t="navCreateAccount">Create account</a>
+        <a class="btn ghost big" href="/login" data-t="navSignIn">Sign in</a>
       </div>
-      <p class="form-error" id="authError" role="alert" hidden></p>
-      <p class="form-hint" id="authStatus" role="status" hidden></p>
-      <button class="btn primary auth-go" id="authGo" type="submit" data-t="sendCode">Send code</button>
-      <p class="foot-note" data-t="signInNote">Your session stays in this browser. Sign out when you are done.</p>
-    </form>
+      <p class="hero-note" id="heroNote" hidden></p>
+      <ul class="proto-strip" data-ta="heroProtocolsLabel" aria-label="Protocols">
+        <li>Chat Completions</li>
+        <li>Responses</li>
+        <li>Anthropic</li>
+        <li>Gemini</li>
+      </ul>
+    </div>
+
+    <figure class="demo-card" aria-labelledby="demoTitle">
+      <figcaption class="demo-cap">
+        <span class="demo-kicker" data-t="demoKicker">One request</span>
+        <span id="demoTitle" data-t="demoTitle">Any OpenAI-compatible client</span>
+      </figcaption>
+      <pre class="code" tabindex="0" data-ta="demoCodeLabel" aria-label="Example request"><code>POST /v1/chat/completions
+Authorization: Bearer sk-magpie-••••••••
+
+{
+  "model": "my-relay/gpt-5",
+  "messages": [
+    { "role": "user", "content": "Hello" }
+  ]
+}</code></pre>
+      <div class="flow" role="img" data-ta="flowAlt" aria-label="A request goes from your key through the gateway to your upstream provider">
+        <span class="flow-node"><span data-t="demoKeyLabel">Your key</span></span>
+        <span class="flow-line" aria-hidden="true"></span>
+        <span class="flow-node core"><span data-t="demoGatewayLabel">magpie gateway</span></span>
+        <span class="flow-line" aria-hidden="true"></span>
+        <span class="flow-node"><span data-t="demoUpstreamLabel">Your upstream</span></span>
+      </div>
+      <p class="demo-note" data-t="demoCaption">magpie picks the provider and model the key allows, forwards the request and bills it to your wallet.</p>
+    </figure>
   </section>
 
-  <section id="portal" hidden>
-    <!-- The reader's balance, and recharging it when the deployment takes
-         payments. No button is drawn where the deployment has none. -->
-    <section class="panel" id="walletPanel">
-      <div class="panel-head">
-        <div class="grow">
-          <h2 data-t="walletTitle">Wallet</h2>
-          <p class="panel-desc" data-t="walletDesc">Your balance for house channels, and recharging it.</p>
-        </div>
-        <button type="button" class="btn" id="recharge" data-t="recharge" hidden>Recharge</button>
-      </div>
-      <div class="state" id="walletState"></div>
-      <div class="wallet-balance" id="walletBalance" hidden>
-        <div class="wstat"><span data-t="balanceAvailable">Available</span><strong id="walletAvailable"></strong></div>
-        <div class="wstat"><span data-t="balanceHeld">On hold</span><strong id="walletHeld"></strong></div>
-        <div class="wstat"><span data-t="balanceTotal">Balance</span><strong id="walletTotal"></strong></div>
-      </div>
-      <p class="form-note wallet-note" id="walletUnavailable" data-t="paymentsUnavailable" hidden></p>
-      <p class="form-note wallet-note" id="noPresets" data-t="noPresets" hidden></p>
-      <form class="form" id="rechargeForm" hidden novalidate>
-        <div class="field">
-          <span data-t="amountLabel">Amount</span>
-          <div class="chips" id="presets" role="group" data-ta="amountLabel"></div>
-        </div>
-        <div class="field">
-          <span data-t="methodLabel">Payment method</span>
-          <div class="seg" id="payProvider" role="group" data-ta="methodLabel">
-            <button type="button" data-provider="alipay" aria-pressed="true" data-t="methodAlipay">Alipay</button>
-            <button type="button" data-provider="wechat" aria-pressed="false" data-t="methodWeChat">WeChat Pay</button>
-          </div>
-        </div>
-        <p class="form-error" id="payError" role="alert" hidden></p>
-        <div class="form-actions">
-          <button type="submit" class="btn primary" id="payGo" data-t="pay">Pay</button>
-          <button type="button" class="btn ghost" id="payCancel" data-t="cancel">Cancel</button>
-        </div>
-      </form>
-      <div class="pay-box" id="payBox" hidden>
-        <div class="row-name">
-          <span class="name" data-t="orderTitle">Recharge order</span>
-          <span class="pill" id="orderStatus"></span>
-        </div>
-        <p class="row-sub" id="orderAmountLine"></p>
-        <div class="pay-actions">
-          <a class="btn primary small" id="payOpen" target="_blank" rel="noopener noreferrer" data-t="openPayment" hidden>Open payment page</a>
-          <a class="btn small" id="wechatOpen" target="_blank" rel="noopener noreferrer" data-t="openWeChat" hidden>Open in WeChat</a>
-        </div>
-        <div class="pay-code" id="payCodeRow" hidden>
-          <code id="payCode"></code>
-          <button type="button" class="btn small" id="payCopy" data-t="copyPayLink">Copy payment link</button>
-        </div>
-        <p class="order-note" id="orderNote" hidden></p>
-        <div class="form-actions">
-          <button type="button" class="btn small" id="orderCheck" data-t="checkStatus">Check status</button>
-          <button type="button" class="btn ghost small" id="orderClose" data-t="closeOrder">Close</button>
-        </div>
-      </div>
-      <div class="orders-own" id="walletOrders"></div>
-    </section>
+  <section class="section" id="features" aria-labelledby="featuresTitle">
+    <div class="section-head">
+      <h2 id="featuresTitle" data-t="featuresTitle">What the relay does</h2>
+      <p data-t="featuresLead">Only the capabilities this deployment serves: a key-based relay with tenant isolation, scoped keys and prepaid billing.</p>
+    </div>
+    <div class="feature-grid">
+      <article class="feat">
+        <span class="feat-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><g fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="5" width="14" height="10" rx="2"/><path d="M6.5 9.5h7M6.5 12h4"/></g></svg></span>
+        <h3 data-t="featProvidersTitle">Your own upstreams</h3>
+        <p data-t="featProvidersDesc">Register keyed providers and magpie forwards requests with your credential. Keys are encrypted at rest and never drawn again.</p>
+      </article>
+      <article class="feat">
+        <span class="feat-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><g fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="10" cy="10" r="3"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4"/></g></svg></span>
+        <h3 data-t="featIsolationTitle">Tenant isolation</h3>
+        <p data-t="featIsolationDesc">Each provider belongs to one user or one house channel. Requests resolve only the models the caller is allowed to see.</p>
+      </article>
+      <article class="feat">
+        <span class="feat-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><g fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6.5" cy="10" r="2.5"/><path d="M9 10h8M14 10v2.5M12 10v2"/></g></svg></span>
+        <h3 data-t="featKeysTitle">Scoped API keys</h3>
+        <p data-t="featKeysDesc">Issue gateway keys limited to models, house channels, an expiry date and a concurrency cap. The secret is shown once.</p>
+      </article>
+      <article class="feat">
+        <span class="feat-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><g fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 6h5v8H3zM12 6h5v8h-5zM8 10h4"/></g></svg></span>
+        <h3 data-t="featGroupsTitle">Routing groups</h3>
+        <p data-t="featGroupsDesc">Name a list of provider and model targets and route over it in order, failing over when one upstream cannot serve.</p>
+      </article>
+      <article class="feat">
+        <span class="feat-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><g fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 6.5h14v9H3zM3 6.5l7 4 7-4"/></g></svg></span>
+        <h3 data-t="featWalletTitle">Wallet and house channels</h3>
+        <p data-t="featWalletDesc">Use channels the operator publishes, priced per model. Requests reserve and settle against a prepaid balance with per-attempt holds.</p>
+      </article>
+      <article class="feat">
+        <span class="feat-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><g fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="5" width="15" height="10" rx="2"/><path d="M2.5 8.5h15M5.5 12h2"/></g></svg></span>
+        <h3 data-t="featPaymentsTitle">Recharge when enabled</h3>
+        <p data-t="featPaymentsDesc">Where the operator turns payments on, top up by Alipay or WeChat Pay. The balance and every hold are visible in the portal.</p>
+      </article>
+      <article class="feat">
+        <span class="feat-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><g fill="none" stroke="currentColor" stroke-width="1.4"><path d="M10 2.5l6 2.5v5c0 3.5-2.6 6.3-6 7.5-3.4-1.2-6-4-6-7.5V5z"/><path d="M7.4 10l1.9 1.9 3.4-3.4"/></g></svg></span>
+        <h3 data-t="featSecurityTitle">Safe by default</h3>
+        <p data-t="featSecurityDesc">Outbound addresses are checked at the socket. Loopback, private, link-local and metadata targets are refused unless the operator allows them.</p>
+      </article>
+      <article class="feat">
+        <span class="feat-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><g fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="10" cy="5.5" rx="6" ry="2.5"/><path d="M4 5.5v9c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-9M4 10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5"/></g></svg></span>
+        <h3 data-t="featDeployTitle">Runs on PostgreSQL</h3>
+        <p data-t="featDeployDesc">The cloud service ships in the same binary, behind Docker and a PostgreSQL store. Migrations apply at startup.</p>
+      </article>
+    </div>
+  </section>
 
-    <!-- The latest requests billed to the wallet. -->
-    <section class="panel" id="usagePanel">
-      <div class="panel-head">
-        <div class="grow">
-          <h2 data-t="usageTitle">Usage</h2>
-          <p class="panel-desc" data-t="usageDesc">The latest requests billed to your wallet.</p>
-        </div>
-      </div>
-      <div class="state" id="usageState"></div>
-      <ul class="rows" id="usageList"></ul>
-    </section>
+  <section class="section" id="how" aria-labelledby="howTitle">
+    <div class="section-head">
+      <h2 id="howTitle" data-t="howTitle">From account to first request</h2>
+      <p data-t="howLead">Three steps, no local install.</p>
+    </div>
+    <ol class="steps">
+      <li class="step">
+        <span class="step-num" aria-hidden="true">1</span>
+        <h3 data-t="stepOneTitle">Create your account</h3>
+        <p data-t="stepOneDesc">Verify your email address, then choose a password. If registration is closed, ask the operator for an account.</p>
+      </li>
+      <li class="step">
+        <span class="step-num" aria-hidden="true">2</span>
+        <h3 data-t="stepTwoTitle">Add a provider or a channel</h3>
+        <p data-t="stepTwoDesc">Bring your own upstream key, or add a house channel the operator published. Nothing else on the machine is touched.</p>
+      </li>
+      <li class="step">
+        <span class="step-num" aria-hidden="true">3</span>
+        <h3 data-t="stepThreeTitle">Create a gateway key</h3>
+        <p data-t="stepThreeDesc">Pick the models and channels it may use, then point any compatible client at this address with that key.</p>
+      </li>
+    </ol>
+  </section>
 
-    <!-- The reader's own keyed providers. -->
-    <section class="panel" id="providersPanel">
-      <div class="panel-head">
-        <div class="grow">
-          <h2 data-t="providersTitle">Your providers</h2>
-          <p class="panel-desc" data-t="providersDesc">Keyed providers only you can use, served through magpie's gateway.</p>
-        </div>
-        <button type="button" class="btn" id="addProvider" data-t="addProvider">Add provider</button>
-      </div>
-      <div class="state" id="providersState"></div>
-      <ul class="rows" id="providersList"></ul>
-      <form class="form" id="providerForm" hidden novalidate>
-        <div class="form-grid">
-          <label class="field" for="pName">
-            <span data-t="nameLabel">Name</span>
-            <input class="input" id="pName" type="text" autocomplete="off" spellcheck="false" maxlength="100" data-tp="namePlaceholder">
-          </label>
-          <label class="field" for="pId">
-            <span data-t="idLabel">Provider ID</span>
-            <input class="input mono" id="pId" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="80" data-tp="idPlaceholder">
-            <span class="hint" data-t="idHint">Used in model names, like my-relay/model.</span>
-          </label>
-        </div>
-        <div class="field">
-          <span data-t="endpointLabel">API endpoint</span>
-          <div class="seg" id="pProtocol" role="group" data-ta="endpointLabel">
-            <button type="button" data-protocol="chat" aria-pressed="true" data-t="protocolChat">Chat</button>
-            <button type="button" data-protocol="responses" aria-pressed="false" data-t="protocolResponses">Responses</button>
-            <button type="button" data-protocol="anthropic" aria-pressed="false" data-t="protocolAnthropic">Anthropic</button>
-            <button type="button" data-protocol="gemini" aria-pressed="false" data-t="protocolGemini">Gemini</button>
-          </div>
-          <input class="input mono" id="pBase" type="url" autocomplete="off" spellcheck="false" autocapitalize="off" data-tp="endpointPlaceholder">
-        </div>
-        <label class="field" for="pKey">
-          <span data-t="keyLabel">API key</span>
-          <input class="input mono" id="pKey" type="password" autocomplete="new-password" spellcheck="false" autocapitalize="off">
-          <span class="hint" data-t="keyHint">Stored encrypted and never shown again after saving.</span>
-        </label>
-        <label class="field" for="pModels">
-          <span data-t="modelsLabel">Models (optional)</span>
-          <textarea class="textarea" id="pModels" rows="2" spellcheck="false" data-tp="modelsPlaceholder"></textarea>
-          <span class="hint" data-t="modelsHint">Leave empty to allow every model this provider serves.</span>
-        </label>
-        <p class="form-error" id="pError" role="alert" hidden></p>
-        <div class="form-actions">
-          <button type="submit" class="btn primary" id="pSave" data-t="save">Save</button>
-          <button type="button" class="btn ghost" id="pCancel" data-t="cancel">Cancel</button>
-        </div>
-      </form>
-    </section>
+  <section class="section security" id="security" aria-labelledby="securityTitle">
+    <div class="section-head">
+      <h2 id="securityTitle" data-t="securityTitle">Where the boundary is</h2>
+      <p data-t="securityLead">magpie cloud is a relay, not a vault: it sees the requests it forwards. These are the limits it enforces.</p>
+    </div>
+    <ul class="sec-list">
+      <li><span class="sec-dot" aria-hidden="true"></span><span data-t="secEncrypted">Upstream credentials are encrypted with the deployment's configuration key and are never returned to a page.</span></li>
+      <li><span class="sec-dot" aria-hidden="true"></span><span data-t="secScoped">Every read and write is scoped to the session's account; administrators act through the same server-side checks.</span></li>
+      <li><span class="sec-dot" aria-hidden="true"></span><span data-t="secOutbound">Outbound provider addresses are resolved and checked before connecting; private and metadata ranges are refused by default.</span></li>
+      <li><span class="sec-dot" aria-hidden="true"></span><span data-t="secHashed">Gateway keys and email codes are stored as hashes. A new gateway secret is shown once and cannot be read again.</span></li>
+      <li><span class="sec-dot" aria-hidden="true"></span><span data-t="secRelayOnly">Cloud mode serves the relay and its portal only. Local agents, sessions, library, memory, MCP, plugins and subscription rotation are not enabled.</span></li>
+    </ul>
+  </section>
 
-    <!-- Published house channels, added to or taken off the reader's
-         account. The gateway then lets their requests use them. -->
-    <section class="panel" id="housesPanel">
-      <div class="panel-head">
-        <div class="grow">
-          <h2 data-t="housesTitle">House channels</h2>
-          <p class="panel-desc" data-t="housesDesc">Shared channels your operator has published.</p>
-        </div>
-      </div>
-      <div class="state" id="housesState"></div>
-      <ul class="rows" id="housesList"></ul>
-    </section>
-
-    <!-- The reader's gateway keys. A new secret is shown once, here, and
-         never written to storage or drawn again. -->
-    <section class="panel" id="keysPanel">
-      <div class="panel-head">
-        <div class="grow">
-          <h2 data-t="keysTitle">API keys</h2>
-          <p class="panel-desc" data-t="keysDesc">Keys for calling the gateway. The secret is shown once, when you create it.</p>
-        </div>
-        <button type="button" class="btn" id="newKey" data-t="newKey">Create key</button>
-      </div>
-      <div class="once" id="secretBox" hidden>
-        <h3 data-t="secretTitle">Your new API key</h3>
-        <p data-t="secretHint">Copy it now. This is the only time it is shown.</p>
-        <div class="once-key">
-          <code id="secretValue" tabindex="-1"></code>
-        </div>
-        <div class="once-actions">
-          <button type="button" class="btn primary small" id="secretCopy" data-t="copy">Copy</button>
-          <button type="button" class="btn ghost small" id="secretDone" data-t="done">Done</button>
-          <span class="hint" id="secretStatus" role="status" hidden></span>
-        </div>
-      </div>
-      <div class="state" id="keysState"></div>
-      <ul class="rows" id="keysList"></ul>
-      <form class="form" id="keyForm" hidden novalidate>
-        <div class="form-grid">
-          <label class="field" for="keyName">
-            <span data-t="keyNameLabel">Key name</span>
-            <input class="input" id="keyName" type="text" autocomplete="off" spellcheck="false" maxlength="100" data-tp="keyNamePlaceholder">
-          </label>
-          <label class="field" for="keyExpires">
-            <span data-t="keyExpiresLabel">Expires (optional)</span>
-            <input class="input" id="keyExpires" type="date" autocomplete="off">
-            <span class="hint" data-t="keyExpiresHint">Expires at the end of that day, UTC.</span>
-          </label>
-        </div>
-        <label class="field" for="keyModels">
-          <span data-t="keyModelsLabel">Models (optional)</span>
-          <textarea class="textarea" id="keyModels" rows="2" spellcheck="false" data-tp="keyModelsPlaceholder"></textarea>
-          <span class="hint" data-t="keyModelsHint">Leave empty to allow every model.</span>
-        </label>
-        <div class="field">
-          <span data-t="keyChannelsLabel">House channels (optional)</span>
-          <div class="chips" id="keyChannels" role="group" data-ta="keyChannelsLabel"></div>
-          <span class="hint" id="keyChannelsHint" data-t="keyChannelsHint">Leave all off to allow every house channel you have added.</span>
-        </div>
-        <label class="field" for="keyConcurrency">
-          <span data-t="keyConcurrencyLabel">Requests at once (optional)</span>
-          <input class="input" id="keyConcurrency" type="number" min="0" max="1000" step="1" inputmode="numeric" placeholder="0">
-          <span class="hint" data-t="keyConcurrencyHint">0 means no limit. At most 1000.</span>
-        </label>
-        <p class="form-error" id="keyError" role="alert" hidden></p>
-        <div class="form-actions">
-          <button type="submit" class="btn primary" id="keySave" data-t="create">Create</button>
-          <button type="button" class="btn ghost" id="keyCancel" data-t="cancel">Cancel</button>
-        </div>
-      </form>
-    </section>
-
-    <!-- The reader's own routing groups, over their providers' models. -->
-    <section class="panel" id="groupsPanel">
-      <div class="panel-head">
-        <div class="grow">
-          <h2 data-t="groupsTitle">Routing groups</h2>
-          <p class="panel-desc" data-t="groupsDesc">Named lists of models that requests can be routed over.</p>
-        </div>
-        <button type="button" class="btn" id="newGroup" data-t="newGroup">Create group</button>
-      </div>
-      <div class="state" id="groupsState"></div>
-      <ul class="rows" id="groupsList"></ul>
-      <form class="form" id="groupForm" hidden novalidate>
-        <div class="form-grid">
-          <label class="field" for="gName">
-            <span data-t="groupNameLabel">Routing group name</span>
-            <input class="input" id="gName" type="text" autocomplete="off" spellcheck="false" maxlength="100" data-tp="groupNamePlaceholder">
-          </label>
-          <label class="field" for="gId">
-            <span data-t="groupIdLabel">Group ID</span>
-            <input class="input mono" id="gId" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="80" data-tp="idPlaceholder">
-            <span class="hint" data-t="groupIdHint">A short identifier for this group.</span>
-          </label>
-        </div>
-        <label class="field" for="gMembers">
-          <span data-t="groupMembersLabel">Members</span>
-          <textarea class="textarea" id="gMembers" rows="3" spellcheck="false" data-tp="groupMembersPlaceholder"></textarea>
-          <span class="hint" data-t="groupMembersHint">Use provider/model from your providers, or group/&lt;id&gt; for another group.</span>
-        </label>
-        <p class="form-error" id="groupError" role="alert" hidden></p>
-        <div class="form-actions">
-          <button type="submit" class="btn primary" id="gSave" data-t="create">Create</button>
-          <button type="button" class="btn ghost" id="gCancel" data-t="cancel">Cancel</button>
-        </div>
-      </form>
-    </section>
-
-    <!-- Administration: house channels, their state and their shared
-         providers. Drawn only for an administrator; no request is made
-         otherwise. -->
-    <section class="panel" id="adminPanel" hidden>
-      <div class="panel-head">
-        <div class="grow">
-          <h2 data-t="adminTitle">Administration</h2>
-          <p class="panel-desc" data-t="adminDesc">House channels and their shared providers.</p>
-        </div>
-        <button type="button" class="btn" id="newChannel" data-t="createChannel">New house channel</button>
-      </div>
-      <div class="state" id="adminState"></div>
-      <ul class="rows" id="adminList"></ul>
-      <form class="form" id="channelForm" hidden novalidate>
-        <div class="form-grid">
-          <label class="field" for="chName">
-            <span data-t="channelNameLabel">Channel name</span>
-            <input class="input" id="chName" type="text" autocomplete="off" spellcheck="false" maxlength="100" data-tp="channelNamePlaceholder">
-          </label>
-          <label class="field" for="chDesc">
-            <span data-t="channelDescLabel">Description (optional)</span>
-            <input class="input" id="chDesc" type="text" autocomplete="off" spellcheck="false" maxlength="200" data-tp="channelDescPlaceholder">
-          </label>
-        </div>
-        <p class="form-error" id="chError" role="alert" hidden></p>
-        <div class="form-actions">
-          <button type="submit" class="btn primary" id="chSave" data-t="create">Create</button>
-          <button type="button" class="btn ghost" id="chCancel" data-t="cancel">Cancel</button>
-        </div>
-      </form>
-      <form class="form" id="houseProviderForm" hidden novalidate>
-        <p class="form-title" id="hpTitle"></p>
-        <input type="hidden" id="hpChannel">
-        <div class="form-grid">
-          <label class="field" for="hpName">
-            <span data-t="nameLabel">Name</span>
-            <input class="input" id="hpName" type="text" autocomplete="off" spellcheck="false" maxlength="100" data-tp="namePlaceholder">
-          </label>
-          <label class="field" for="hpId">
-            <span data-t="idLabel">Provider ID</span>
-            <input class="input mono" id="hpId" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="80" data-tp="idPlaceholder">
-            <span class="hint" data-t="idHint">Used in model names, like my-relay/model.</span>
-          </label>
-        </div>
-        <div class="field">
-          <span data-t="endpointLabel">API endpoint</span>
-          <div class="seg" id="hpProtocol" role="group" data-ta="endpointLabel">
-            <button type="button" data-protocol="chat" aria-pressed="true" data-t="protocolChat">Chat</button>
-            <button type="button" data-protocol="responses" aria-pressed="false" data-t="protocolResponses">Responses</button>
-            <button type="button" data-protocol="anthropic" aria-pressed="false" data-t="protocolAnthropic">Anthropic</button>
-            <button type="button" data-protocol="gemini" aria-pressed="false" data-t="protocolGemini">Gemini</button>
-          </div>
-          <input class="input mono" id="hpBase" type="url" autocomplete="off" spellcheck="false" autocapitalize="off" data-tp="endpointPlaceholder">
-        </div>
-        <label class="field" for="hpKey">
-          <span data-t="keyLabel">API key</span>
-          <input class="input mono" id="hpKey" type="password" autocomplete="new-password" spellcheck="false" autocapitalize="off">
-          <span class="hint" data-t="keyHint">Stored encrypted and never shown again after saving.</span>
-        </label>
-        <label class="field" for="hpModels">
-          <span data-t="modelsLabel">Models (optional)</span>
-          <textarea class="textarea" id="hpModels" rows="2" spellcheck="false" data-tp="modelsPlaceholder"></textarea>
-          <span class="hint" data-t="modelsHint">Leave empty to allow every model this provider serves.</span>
-        </label>
-        <p class="form-error" id="hpError" role="alert" hidden></p>
-        <div class="form-actions">
-          <button type="submit" class="btn primary" id="hpSave" data-t="save">Save</button>
-          <button type="button" class="btn ghost" id="hpCancel" data-t="cancel">Cancel</button>
-        </div>
-      </form>
-    </section>
-
-    <!-- Accounts, orders and the audit log: administrators only. -->
-    <section class="panel" id="usersPanel" hidden>
-      <div class="panel-head">
-        <div class="grow">
-          <h2 data-t="usersTitle">Users</h2>
-          <p class="panel-desc" data-t="usersDesc">Accounts that can sign in to this deployment.</p>
-        </div>
-      </div>
-      <div class="state" id="usersState"></div>
-      <ul class="rows" id="usersList"></ul>
-    </section>
-
-    <section class="panel" id="ordersPanel" hidden>
-      <div class="panel-head">
-        <div class="grow">
-          <h2 data-t="ordersTitle">Orders</h2>
-          <p class="panel-desc" data-t="ordersDesc">Recharge orders across the deployment.</p>
-        </div>
-      </div>
-      <div class="state" id="ordersState"></div>
-      <ul class="rows" id="ordersList"></ul>
-    </section>
-
-    <section class="panel" id="auditPanel" hidden>
-      <div class="panel-head">
-        <div class="grow">
-          <h2 data-t="auditTitle">Audit log</h2>
-          <p class="panel-desc" data-t="auditDesc">Administrative actions on this deployment.</p>
-        </div>
-      </div>
-      <div class="state" id="auditState"></div>
-      <ul class="rows" id="auditList"></ul>
-    </section>
+  <section class="cta-band" aria-labelledby="ctaTitle">
+    <div>
+      <h2 id="ctaTitle" data-t="ctaTitle">Ready to route?</h2>
+      <p data-t="ctaLead">Create an account, or sign in if you already have one.</p>
+    </div>
+    <div class="hero-cta" id="ctaBandActions">
+      <a class="btn primary big" href="/register" data-t="navCreateAccount">Create account</a>
+      <a class="btn ghost big" href="/login" data-t="navSignIn">Sign in</a>
+    </div>
   </section>
 </main>
+
+<footer class="landing-foot">
+  <div class="foot-brand">
+    <span class="brand-name">magpie</span>
+    <span class="brand-tag" data-t="brandCloud">cloud</span>
+    <p data-t="footNote">Part of magpie, an open-source model gateway.</p>
+  </div>
+  <nav class="foot-links" data-ta="footLinks" aria-label="Footer">
+    <a href="#features" data-t="navFeatures">Features</a>
+    <a href="#security" data-t="navSecurity">Security</a>
+    <div id="footAuth"><a class="btn ghost small" href="/login" data-t="navSignIn">Sign in</a></div>
+  </nav>
+</footer>
 <script src="/cloud/i18n.js" defer></script>
-<script src="/cloud/app.js" defer></script>
+<script src="/cloud/shared.js" defer></script>
+<script src="/cloud/landing.js" defer></script>
 </body>
 </html>

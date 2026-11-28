@@ -98,6 +98,7 @@ func (r *cloudRuntime) keepCloudJobs(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	_ = r.reconcileCloudHolds(ctx)
+	_ = r.store.CleanupAuthAttempts(ctx, time.Now().Add(-2*time.Hour))
 	for {
 		select {
 		case <-ctx.Done():
@@ -111,6 +112,7 @@ func (r *cloudRuntime) keepCloudJobs(ctx context.Context) {
 				}
 			}
 			_ = r.reconcileCloudHolds(ctx)
+			_ = r.store.CleanupAuthAttempts(ctx, time.Now().Add(-2*time.Hour))
 		}
 	}
 }
